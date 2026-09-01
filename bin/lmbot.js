@@ -22,7 +22,7 @@ ${color('bold', 'COMMANDS')}
   undo          Reverse a previous write
   help          Show this message
 
-${color('bold', 'DATE SELECTION')}   ${color('dim', '(shared by categorize, audit, duplicates, learn)')}
+${color('bold', 'DATE SELECTION')}   ${color('dim', '(shared by categorize, confirm, audit, payees, duplicates, learn)')}
   --month 2026-08          A single calendar month
   --year 2025              A whole year
   --last-days 30           Rolling window ending today
