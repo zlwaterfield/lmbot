@@ -120,11 +120,14 @@ export async function categorize(flags) {
     suggestion.review ??
     (markReviewed ? true : autoReview && qualifiesForAutoReview(suggestion, autoReviewOpts));
 
-  const rows = candidates
+  const suggested = candidates
     .filter((tx) => suggestions.has(tx.id))
-    .map((tx) => ({ tx, suggestion: suggestions.get(tx.id) }))
-    // A placeholder transaction the cascade wants to leave where it is needs no write.
-    .filter(({ tx, suggestion }) => suggestion.categoryId !== tx.category_id);
+    .map((tx) => ({ tx, suggestion: suggestions.get(tx.id) }));
+
+  // A suggestion identical to the category already on the transaction needs no
+  // write. Counted separately so every candidate is accounted for.
+  const unchanged = suggested.filter(({ tx, suggestion }) => suggestion.categoryId === tx.category_id);
+  const rows = suggested.filter(({ tx, suggestion }) => suggestion.categoryId !== tx.category_id);
 
   if (!rows.length) {
     console.log(color('yellow', `\nNo confident suggestions for ${candidates.length} transactions.`));
@@ -162,8 +165,32 @@ export async function categorize(flags) {
           : '')
     );
   }
+  // Every candidate lands in exactly one of these buckets.
+  if (unchanged.length) {
+    console.log(
+      color('dim', `${unchanged.length} already in the suggested category — nothing to change`)
+    );
+  }
   if (undecided.length) {
-    console.log(color('dim', `${undecided.length} left uncategorized — below the ${pct(minConfidence)} confidence floor.`));
+    console.log(
+      color('dim', `${undecided.length} with no confident suggestion — below the ${pct(minConfidence)} floor`)
+    );
+  }
+  const accounted = rows.length + unchanged.length + undecided.length;
+  if (accounted !== candidates.length) {
+    console.log(color('yellow', `  ⚠ ${candidates.length - accounted} unaccounted for — please report this`));
+  }
+  if (cascade.poisoned.length) {
+    const tiers = [...new Set(cascade.poisoned.map((p) => p.tier))].join(', ');
+    console.log(
+      color('yellow', `\n${cascade.poisoned.length} suggestion${cascade.poisoned.length === 1 ? ' was' : 's were'} dropped for naming an import-default category (from: ${tiers}).`)
+    );
+    if (tiers.includes('memory')) {
+      console.log(color('dim', '  Your memory was built before those were excluded — re-run `lmbot learn` to clear it.'));
+    }
+    if (tiers.includes('rule')) {
+      console.log(color('dim', '  A rule in data/rules.json points at a placeholder category.'));
+    }
   }
   if (cascade.classifier?.usage.calls) console.log(color('dim', cascade.classifier.costNote()));
 

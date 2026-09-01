@@ -7,19 +7,24 @@ import { Classifier } from './llm.js';
  * it could not answer, so the expensive tier runs on the smallest possible set.
  */
 export class Cascade {
-  constructor({ kb, rules, memory, classifier, minConfidence = 0.7 }) {
+  constructor({ kb, rules, memory, classifier, minConfidence = 0.7, excludeIds = new Set() }) {
     this.kb = kb;
     this.rules = rules;
     this.memory = memory;
     this.classifier = classifier;
     this.minConfidence = minConfidence;
+    // Import-default categories are never a valid answer from ANY tier. The LLM
+    // is filtered at the prompt, but a stale memory.json built before that rule
+    // existed can still hold poisoned entries, and a rule can name one outright.
+    this.excludeIds = excludeIds;
+    this.poisoned = [];
   }
 
   static async create({ kb, useLlm = true, minConfidence = 0.7, verbose = false, warn, excludeIds = new Set() }) {
     const rules = RuleEngine.load(kb, { warn });
     const memory = Memory.load();
     const classifier = useLlm ? new Classifier({ kb, verbose, excludeIds }) : null;
-    return new Cascade({ kb, rules, memory, classifier, minConfidence });
+    return new Cascade({ kb, rules, memory, classifier, minConfidence, excludeIds });
   }
 
   /**
@@ -30,14 +35,20 @@ export class Cascade {
     const suggestions = new Map();
     const remaining = [];
 
+    const rejectPoisoned = (suggestion) => {
+      if (!suggestion || !this.excludeIds.has(suggestion.categoryId)) return false;
+      this.poisoned.push({ tier: suggestion.tier, categoryId: suggestion.categoryId });
+      return true;
+    };
+
     for (const tx of transactions) {
       const hit = this.rules.match(tx);
-      if (hit) {
+      if (hit && !rejectPoisoned(hit)) {
         suggestions.set(tx.id, hit);
         continue;
       }
       const remembered = this.memory.match(tx);
-      if (remembered && remembered.confidence >= this.minConfidence) {
+      if (remembered && remembered.confidence >= this.minConfidence && !rejectPoisoned(remembered)) {
         suggestions.set(tx.id, remembered);
         continue;
       }
