@@ -201,7 +201,11 @@ export class CategoryKB {
         const viaPath = Math.max(similarity(wanted, path), contains(path) ? 0.4 : 0) * 0.5;
         return { cat, score: Math.max(leaf, viaPath) };
       })
-      .filter((r) => r.score >= 0.3)
+      // Measured floor. On a real account the genuine matches ("Utilities" ->
+      // "Home Utility Bill", 0.46) sit well above the nonsense ones
+      // ("Home Insurance" -> "Zach's Income", 0.35) when the category simply
+      // does not exist. Suggesting garbage is worse than suggesting nothing.
+      .filter((r) => r.score >= 0.42)
       .sort((a, b) => b.score - a.score);
 
     // Once there is a clear leader, trailing near-ties are noise rather than

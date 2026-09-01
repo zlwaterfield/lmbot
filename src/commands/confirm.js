@@ -83,6 +83,11 @@ export async function confirmCategories(flags) {
     excludeIds: placeholderIds,
     warn: (msg) => console.error(color('yellow', `  ⚠ rules.json — ${msg}`)),
   });
+  if (cascade.rules.problems.length) {
+    console.error(
+      color('dim', `    ↳ run \`lmbot rules --fix\` to apply the unambiguous ones`)
+    );
+  }
 
   const query = { status: 'unreviewed', include_pending: false };
   if (range.start) {

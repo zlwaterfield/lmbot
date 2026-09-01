@@ -63,6 +63,11 @@ export async function categorize(flags) {
     excludeIds: placeholderIds,
     warn: (msg) => console.error(color('yellow', `  ⚠ rules.json — ${msg}`)),
   });
+  if (cascade.rules.problems.length) {
+    console.error(
+      color('dim', `    ↳ run \`lmbot rules --fix\` to apply the unambiguous ones`)
+    );
+  }
   const cstats = cascade.stats();
   console.log(
     color('dim', `tiers: ${cstats.rules} rules · ${cstats.memory} learned payees · ${cstats.llm ?? 'llm disabled'}`)
