@@ -439,6 +439,11 @@ Defaults: 90 days for `categorize` and `duplicates`, 365 for `audit` and `payees
 
 ## Writing rules
 
+> **Backslashes must be doubled.** In JSON, `"\b"` is a backspace character, not a regex
+> word boundary — you need `"\\b"`. A rule written with single backslashes parses fine,
+> compiles fine, and silently matches nothing. lmbot rejects these at load with the
+> correction spelled out, but it is the easiest mistake to make here.
+
 `data/rules.json`. Checked top to bottom, first match wins, and a match skips both the
 memory and LLM tiers.
 
@@ -492,6 +497,7 @@ real money in the wrong place, so those are left for you.
 |---|---|
 | `category` | **required** — name, `"Group > Name"` path, or numeric id |
 | `match` | **required** — JavaScript regex source, as a string |
+| `exclude` | regex that cancels a match — `rent` should find a rent payment, not Enterprise Rent-A-Car |
 | `flags` | regex flags, default `"i"` |
 | `fields` | fields to search, default `["payee", "original_name", "notes"]` |
 | `amount_min` / `amount_max` | bounds on `abs(amount)` |
@@ -568,7 +574,7 @@ ANTHROPIC_MODEL=claude-haiku-4-5 lmbot categorize --year 2023 --include-reviewed
 npm test
 ```
 
-Twelve suites, no framework and no network. They cover payee normalization and location inference,
+Thirteen suites, no framework and no network. They cover payee normalization and location inference,
 category-name suggestion, placeholder handling, the auto-review evidence gate, `never_review`
 holds, the agreement partition behind `confirm`, the guard that stops `learn` eating its own
 LLM guesses, merchant clustering (including the conservative
