@@ -1,6 +1,7 @@
 # lmbot
 
-Auto-categorizes [Lunch Money](https://lunchmoney.app) transactions, and finds duplicates.
+Categorizes [Lunch Money](https://lunchmoney.app) transactions, clears the review queue,
+catches miscategorized ones, tidies merchant names, and finds duplicates.
 
 Built on the [Lunch Money v2 API](https://lunchmoney.dev/v2/docs). Every command that
 writes is **dry-run by default** — you always see the table before anything changes.
@@ -9,7 +10,7 @@ writes is **dry-run by default** — you always see the table before anything ch
 
 ```bash
 npm install
-cp .env.example .env       # add your Lunch Money token
+cp .env.example .env                 # add your Lunch Money token
 cp rules.example.json data/rules.json
 ```
 
@@ -17,18 +18,41 @@ cp rules.example.json data/rules.json
 `ANTHROPIC_API_KEY` is optional — without it, run with `--no-llm` and the first two
 tiers still work offline.
 
+## Three states, three commands
+
+A transaction arrives in one of three states, and each has its own command. Most confusion
+about "why was this skipped?" is really a transaction being in a different state than you
+assumed.
+
+| state | command | what it writes |
+|---|---|---|
+| no category, or an import default like `Payment, Transfer` | `categorize` | the category |
+| already categorized, still unreviewed | `confirm` | the review flag only |
+| already categorized, possibly wrong | `audit` | the category |
+
+`lmbot categories --usage` shows how your own unreviewed transactions divide up.
+
 ## The first run
 
 ```bash
-lmbot learn --year 2025            # teach it from your own history
-lmbot categorize --month 2026-08   # preview
+lmbot rules                     # do this first — a broken rule silently costs you all year
+lmbot rules --fix               # apply the unambiguous category-name suggestions
+
+lmbot learn                     # teach it from your own history
+lmbot categorize --month 2026-08          # preview
 lmbot categorize --month 2026-08 --apply
 lmbot confirm --month 2026-08 --apply     # clear the rest of the review queue
 ```
 
-`learn` matters more than it looks. It reads transactions you already categorized and
-builds a payee→category map from *your* habits, so most of your recurring merchants get
-categorized without an LLM call ever happening.
+Two of those carry more weight than they look.
+
+**`rules` first.** The example file ships with generic category names that almost no real
+account uses verbatim, so a fresh copy is mostly broken rules — and a broken rule silently
+pushes work down to the LLM every single run.
+
+**`learn` before `categorize`.** It reads transactions you already categorized and builds a
+payee→category map from *your* habits, so most recurring merchants never reach the LLM. Run
+it again after reviewing a batch and it keeps getting cheaper.
 
 ## How a transaction gets categorized
 
@@ -321,6 +345,38 @@ A payee is only trusted once it appears `--min-count` times (default 2) *and*
 across two categories teaches nothing, so it's left for the LLM. Re-run it after a big
 manual categorization session.
 
+### `rules` — check your rules against real categories
+
+```bash
+lmbot rules          # which load, which are broken, and what to rename them to
+lmbot rules --fix    # apply the unambiguous ones
+lmbot rules --test   # which rules actually match transactions, which never fire
+```
+
+Covered in full under [Writing rules](#writing-rules). `--test` is the one people skip: a
+rule can resolve to a real category and still never fire because its regex doesn't match
+your bank's descriptors, and nothing else will ever tell you that.
+
+### `categories` — the knowledge base
+
+```bash
+lmbot categories                 # every assignable category, with flags
+lmbot categories --prompt        # exactly what the LLM tier is told
+lmbot categories --usage         # where your unreviewed transactions actually sit
+lmbot categories --json          # machine-readable
+```
+
+`--usage` is the diagnostic for "why didn't `categorize` pick this up?" — it breaks
+unreviewed transactions down by category and marks which ones `categorize` will touch, so an
+import default your sync uses shows up immediately:
+
+```
+COUNT  CATEGORY           ID  CATEGORIZE TOUCHES IT?
+    3  Payment, Transfer  90  yes — placeholder
+    1  (uncategorized)     —  yes — no category
+    1  Transfer           91  no
+```
+
 ### `explain` — why didn't this match?
 
 ```bash
@@ -476,13 +532,22 @@ ANTHROPIC_MODEL=claude-haiku-4-5 lmbot categorize --year 2023 --include-reviewed
 
 ## Safety
 
-- Every writing command is dry-run until you pass `--apply` (or `--delete`).
+- Every writing command is dry-run until you pass `--apply` (or `--delete` for duplicates).
 - Interactive confirmation before writes; `--yes` to skip in scripts.
-- Only uncategorized + unreviewed transactions are touched by default.
-- LLM output is validated against the live category list — a hallucinated, archived, or
-  group-level id never reaches the API.
+- **Reviewing is the boundary.** Nothing that you have reviewed is re-categorized unless you
+  ask with `--include-reviewed`. `categorize` fills empties, `confirm` only ever writes the
+  review flag, and `audit` — the one command that overwrites an existing category — needs a
+  higher confidence floor and is worth reading line by line.
+- LLM output is validated against the live category list; a hallucinated, archived, or
+  group-level id never reaches the API, and neither does an import default.
+- The memory tier never learns from an import default nobody reviewed, nor from lmbot's own
+  unreviewed LLM guesses — otherwise a guess becomes a "habit" and compounds.
+- `never_review` holds stay held whichever tier decided, and outrank every marking flag.
+- Split and grouped transactions are excluded everywhere; the API rejects writes to them.
 - Rate limiting is handled (85/min against a 100/min cap) with `Retry-After` backoff.
-- Journaled writes, reversible with `lmbot undo`.
+- Writes are journaled with their previous value and reversible with `lmbot undo`, which
+  restores only the fields that run actually wrote. **Duplicate deletion is the exception —
+  the API cannot undo it.**
 
 ## Tests
 
@@ -490,7 +555,10 @@ ANTHROPIC_MODEL=claude-haiku-4-5 lmbot categorize --year 2023 --include-reviewed
 npm test
 ```
 
-Covers payee normalization and cleanup, merchant clustering (including the conservative
+Eleven suites, no framework and no network. They cover payee normalization and location inference,
+category-name suggestion, placeholder handling, the auto-review evidence gate, `never_review`
+holds, the agreement partition behind `confirm`, the guard that stops `learn` eating its own
+LLM guesses, merchant clustering (including the conservative
 merge that keeps Amazon and Amazon Web Services apart), the duplicate classifier (transfer
 pairs, split children, keeper selection), and the LLM tier's response validation against a
 stubbed client.
