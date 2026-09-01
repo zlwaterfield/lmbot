@@ -543,6 +543,8 @@ ANTHROPIC_MODEL=claude-haiku-4-5 lmbot categorize --year 2023 --include-reviewed
 - The memory tier never learns from an import default nobody reviewed, nor from lmbot's own
   unreviewed LLM guesses — otherwise a guess becomes a "habit" and compounds.
 - `never_review` holds stay held whichever tier decided, and outrank every marking flag.
+- Every suggestion is checked against the live category list before it is offered, so a
+  category you deleted or archived can never be written back from a stale `memory.json`.
 - Split and grouped transactions are excluded everywhere; the API rejects writes to them.
 - Rate limiting is handled (85/min against a 100/min cap) with `Retry-After` backoff.
 - Writes are journaled with their previous value and reversible with `lmbot undo`, which
@@ -555,7 +557,7 @@ ANTHROPIC_MODEL=claude-haiku-4-5 lmbot categorize --year 2023 --include-reviewed
 npm test
 ```
 
-Eleven suites, no framework and no network. They cover payee normalization and location inference,
+Twelve suites, no framework and no network. They cover payee normalization and location inference,
 category-name suggestion, placeholder handling, the auto-review evidence gate, `never_review`
 holds, the agreement partition behind `confirm`, the guard that stops `learn` eating its own
 LLM guesses, merchant clustering (including the conservative

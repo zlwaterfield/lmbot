@@ -163,6 +163,13 @@ export async function confirmCategories(flags) {
   if (weak.length) {
     console.log(color('dim', `${weak.length} agreed but below the ${pct(minConfidence)} floor — left for you`));
   }
+  if (cascade.stale.length) {
+    const tiers = [...new Set(cascade.stale.map((p) => p.tier))].join(', ');
+    console.log(
+      color('yellow', `\n${cascade.stale.length} suggestion${cascade.stale.length === 1 ? '' : 's'} named a category this account no longer has (from: ${tiers}).`)
+    );
+    console.log(color('dim', '  Re-run `lmbot learn` to rebuild memory against your current categories.'));
+  }
   if (cascade.classifier?.usage.calls) console.log(color('dim', cascade.classifier.costNote()));
 
   if (!agree.length) {

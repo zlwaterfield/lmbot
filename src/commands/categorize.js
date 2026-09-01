@@ -205,6 +205,13 @@ export async function categorize(flags) {
   if (accounted !== candidates.length) {
     console.log(color('yellow', `  ⚠ ${candidates.length - accounted} unaccounted for — please report this`));
   }
+  if (cascade.stale.length) {
+    const tiers = [...new Set(cascade.stale.map((p) => p.tier))].join(', ');
+    console.log(
+      color('yellow', `\n${cascade.stale.length} suggestion${cascade.stale.length === 1 ? '' : 's'} named a category this account no longer has (from: ${tiers}).`)
+    );
+    console.log(color('dim', '  Re-run `lmbot learn` to rebuild memory against your current categories.'));
+  }
   if (cascade.poisoned.length) {
     const tiers = [...new Set(cascade.poisoned.map((p) => p.tier))].join(', ');
     console.log(

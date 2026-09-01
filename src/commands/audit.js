@@ -28,9 +28,7 @@ export async function audit(flags) {
 
   console.log(color('bold', '\nAuditing existing categories'));
   console.log(color('dim', `range: ${range.label} · disagreement threshold ${pct(minConfidence)}`));
-  if (!includeReviewed) {
-    console.log(color('dim', 'only unreviewed transactions (use --include-reviewed to audit reviewed ones too)'));
-  }
+
 
   const kb = await CategoryKB.load(lm);
 
@@ -73,10 +71,36 @@ export async function audit(flags) {
     onPage: (n) => process.stdout.write(`\r${color('dim', `fetching transactions… ${n}`)}`),
   });
 
+  const isBlank = (tx) => tx.category_id == null;
+  const isPlaceholder = (tx) => tx.category_id != null && placeholderIds.has(tx.category_id);
   const candidates = fetched.filter(
-    (tx) => tx.category_id != null && !placeholderIds.has(tx.category_id) && isEditable(tx)
+    (tx) => !isBlank(tx) && !isPlaceholder(tx) && isEditable(tx)
   );
-  console.log(`\r${color('dim', `fetched ${fetched.length}, ${candidates.length} with a real category to check`)}   `);
+  const blankCount = fetched.filter(isBlank).length;
+  const placeholderCount = fetched.filter(isPlaceholder).length;
+  const uneditable = fetched.filter(
+    (tx) => !isBlank(tx) && !isPlaceholder(tx) && !isEditable(tx)
+  ).length;
+  // Say where every fetched transaction went. "fetched 297, checking 120"
+  // otherwise reads as if 177 were lost.
+  console.log(
+    `\r${color('dim', `fetched ${fetched.length} ${includeReviewed ? '' : 'unreviewed '}transactions in range`)}          `
+  );
+  console.log(color('dim', `  ${candidates.length} with a real category to check`));
+  if (blankCount || placeholderCount) {
+    console.log(
+      color('dim', `  ${blankCount + placeholderCount} uncategorized or in an import default`) +
+        color('dim', ' — nothing to audit, that is `lmbot categorize`')
+    );
+  }
+  if (uneditable) {
+    console.log(color('dim', `  ${uneditable} split or grouped — the API can't update them`));
+  }
+  if (!includeReviewed) {
+    console.log(
+      color('dim', '  reviewed transactions were not fetched — add --include-reviewed to audit those too')
+    );
+  }
 
   if (!candidates.length) {
     console.log(color('yellow', '\nNothing categorized in range to audit.\n'));
@@ -106,6 +130,13 @@ export async function audit(flags) {
   console.log(
     color('dim', `\n${agreed} agree · ${disagreements.length} disagree · ${noOpinion} no opinion`)
   );
+  if (cascade.stale.length) {
+    const tiers = [...new Set(cascade.stale.map((p) => p.tier))].join(', ');
+    console.log(
+      color('yellow', `\n${cascade.stale.length} suggestion${cascade.stale.length === 1 ? '' : 's'} named a category this account no longer has (from: ${tiers}).`)
+    );
+    console.log(color('dim', '  Re-run `lmbot learn` to rebuild memory against your current categories.'));
+  }
   if (cascade.classifier?.usage.calls) console.log(color('dim', cascade.classifier.costNote()));
 
   if (!disagreements.length) {

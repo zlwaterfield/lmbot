@@ -18,6 +18,7 @@ export class Cascade {
     // existed can still hold poisoned entries, and a rule can name one outright.
     this.excludeIds = excludeIds;
     this.poisoned = [];
+    this.stale = [];
   }
 
   static async create({ kb, useLlm = true, minConfidence = 0.7, verbose = false, warn, excludeIds = new Set() }) {
@@ -36,9 +37,20 @@ export class Cascade {
     const remaining = [];
 
     const rejectPoisoned = (suggestion) => {
-      if (!suggestion || !this.excludeIds.has(suggestion.categoryId)) return false;
-      this.poisoned.push({ tier: suggestion.tier, categoryId: suggestion.categoryId });
-      return true;
+      if (!suggestion) return false;
+      if (this.excludeIds.has(suggestion.categoryId)) {
+        this.poisoned.push({ tier: suggestion.tier, categoryId: suggestion.categoryId });
+        return true;
+      }
+      // The LLM tier validates its own output, but memory and rules did not.
+      // A category that has since been deleted or archived still sits in
+      // memory.json, and applying one would send an id the account no longer
+      // has straight to the API.
+      if (!this.kb.isAssignable(suggestion.categoryId)) {
+        this.stale.push({ tier: suggestion.tier, categoryId: suggestion.categoryId });
+        return true;
+      }
+      return false;
     };
 
     for (const tx of transactions) {
