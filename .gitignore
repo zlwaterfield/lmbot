@@ -1,0 +1,9 @@
+node_modules/
+.env
+
+# Personal data: learned merchant memory, approved payee aliases, your own
+# categorization rules, and the write journal. All local to your machine.
+data/*
+!data/.gitkeep
+
+*.log

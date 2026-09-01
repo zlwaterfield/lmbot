@@ -1,0 +1,21 @@
+{
+  "name": "lmbot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Auto-categorize Lunch Money transactions with rules, learned memory, and LLM fallback. Also finds duplicates.",
+  "bin": {
+    "lmbot": "./bin/lmbot.js"
+  },
+  "scripts": {
+    "lmbot": "node bin/lmbot.js",
+    "test": "node test/normalize.test.mjs && node test/payees.test.mjs && node test/dupes.test.mjs && node test/llm.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.72.0",
+    "zod": "^4.5.4"
+  }
+}

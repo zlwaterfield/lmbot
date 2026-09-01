@@ -1,0 +1,51 @@
+{
+  "_comment": [
+    "Copy this to data/rules.json and edit. Rules are checked top to bottom;",
+    "the first match wins, and a rule match skips both the memory and LLM tiers.",
+    "",
+    "  category    required. Category name, \"Group > Name\" path, or numeric id.",
+    "  match       required. JavaScript regex source (a string).",
+    "  flags       regex flags, default \"i\".",
+    "  fields      fields to search, default [\"payee\", \"original_name\", \"notes\"].",
+    "  amount_min  match only if abs(amount) >= this.",
+    "  amount_max  match only if abs(amount) <= this.",
+    "  sign        \"debit\" (money out) or \"credit\" (money in).",
+    "  account_ids array of plaid/manual account ids to restrict the rule to.",
+    "  notes       note text stamped onto the transaction when the rule fires.",
+    "  review      true/false to override --mark-reviewed for this rule only."
+  ],
+  "rules": [
+    {
+      "name": "Coffee shops",
+      "category": "Coffee",
+      "match": "\\b(starbucks|blue bottle|peet'?s|philz|dunkin|verve|la colombe)\\b"
+    },
+    {
+      "name": "Rideshare",
+      "category": "Transportation",
+      "match": "\\b(uber\\s*\\*?\\s*trip|lyft)\\b"
+    },
+    {
+      "name": "Streaming subscriptions",
+      "category": "Subscriptions",
+      "match": "\\b(netflix|spotify|hulu|disney\\s*plus|hbo\\s*max|max\\.com|youtube\\s*premium)\\b"
+    },
+    {
+      "name": "Groceries",
+      "category": "Groceries",
+      "match": "\\b(whole ?foods|trader ?joe|safeway|kroger|wegmans|aldi|costco wholesale|h.?e.?b)\\b"
+    },
+    {
+      "name": "Paycheck",
+      "category": "Income",
+      "match": "\\b(direct dep|payroll|dir dep)\\b",
+      "sign": "credit"
+    },
+    {
+      "name": "Rent",
+      "category": "Rent",
+      "match": "\\brent\\b",
+      "amount_min": 500
+    }
+  ]
+}
