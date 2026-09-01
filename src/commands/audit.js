@@ -158,7 +158,33 @@ export async function audit(flags) {
     { header: 'VIA', get: (r) => r.suggestion.tier },
     { header: 'CONF', right: true, get: (r) => pct(r.suggestion.confidence) },
     { header: 'REVIEWED', get: (r) => (r.tx.status === 'reviewed' ? color('dim', 'yes') : '') },
+    { header: 'WHY', get: (r) => truncate(r.suggestion.reason ?? '', 34) },
   ]));
+
+  // When a finding list is mostly false positives, the cause is usually one
+  // over-broad source rather than many bad guesses. Grouping by what produced
+  // each finding makes that obvious instead of leaving it to be eyeballed.
+  const bySource = new Map();
+  for (const { suggestion } of disagreements) {
+    const key =
+      suggestion.tier === 'rule'
+        ? `rule "${suggestion.name ?? suggestion.reason}"`
+        : suggestion.tier;
+    bySource.set(key, (bySource.get(key) ?? 0) + 1);
+  }
+  if (bySource.size) {
+    console.log('\n' + color('bold', 'What produced these findings'));
+    for (const [source, n] of [...bySource.entries()].sort((a, b) => b[1] - a[1])) {
+      const share = n / disagreements.length;
+      const flag = share >= 0.4 && n >= 3 ? color('yellow', '  ← check this one first') : '';
+      console.log(`  ${String(n).padStart(3)}  ${source}${flag}`);
+    }
+    console.log(
+      color('dim', '\nIf the current categories were right, the source above is over-matching.') +
+      color('dim', '\nFor a rule: narrow its regex or drop it. For memory: your history for that') +
+      color('dim', '\npayee is mixed — categorize a few consistently and re-run `lmbot learn`.')
+    );
+  }
 
   console.log(
     '\n' + color('bold', `${disagreements.length} possible miscategorization${disagreements.length === 1 ? '' : 's'} `) +

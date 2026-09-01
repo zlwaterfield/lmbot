@@ -69,14 +69,18 @@ export class RuleEngine {
         );
         return;
       }
-      const escaping = escapingProblem(rule.match);
+      const escaping = escapingProblem(rule.match) ?? (rule.exclude ? escapingProblem(rule.exclude) : null);
       if (escaping) {
         this.problems.push(`${label}: ${escaping}`);
         return;
       }
       let regex;
+      let exclude = null;
       try {
         regex = new RegExp(rule.match, rule.flags ?? 'i');
+        // A carve-out for the cases a broad pattern would otherwise swallow —
+        // "rent" should find a rent payment but not Enterprise Rent-A-Car.
+        if (rule.exclude) exclude = new RegExp(rule.exclude, rule.flags ?? 'i');
       } catch (err) {
         this.problems.push(`${label}: bad regex — ${err.message}`);
         return;
@@ -84,6 +88,7 @@ export class RuleEngine {
       this.rules.push({
         name: label,
         regex,
+        exclude,
         categoryId,
         fields: rule.fields ?? ['payee', 'original_name', 'notes'],
         amountMin: rule.amount_min ?? null,
@@ -124,6 +129,7 @@ export class RuleEngine {
       }
       const haystack = rule.fields.map((f) => tx[f] ?? '').join(' ␟ ');
       if (!rule.regex.test(haystack)) continue;
+      if (rule.exclude?.test(haystack)) continue;
 
       return {
         tier: 'rule',

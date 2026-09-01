@@ -9,7 +9,7 @@
   },
   "scripts": {
     "lmbot": "node bin/lmbot.js",
-    "test": "node test/normalize.test.mjs && node test/locations.test.mjs && node test/payees.test.mjs && node test/placeholders.test.mjs && node test/suggest.test.mjs && node test/autoreview.test.mjs && node test/feedback.test.mjs && node test/confirm.test.mjs && node test/holds.test.mjs && node test/stale.test.mjs && node test/dupes.test.mjs && node test/llm.test.mjs"
+    "test": "node test/normalize.test.mjs && node test/locations.test.mjs && node test/payees.test.mjs && node test/placeholders.test.mjs && node test/suggest.test.mjs && node test/autoreview.test.mjs && node test/feedback.test.mjs && node test/confirm.test.mjs && node test/exclude.test.mjs && node test/holds.test.mjs && node test/stale.test.mjs && node test/dupes.test.mjs && node test/llm.test.mjs"
   },
   "engines": {
     "node": ">=20"
