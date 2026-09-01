@@ -69,6 +69,11 @@ export class Cascade {
     return { suggestions, undecided };
   }
 
+  /** Name of the hold covering this transaction, or null. */
+  holdsReview(tx) {
+    return this.rules.holdsReview(tx);
+  }
+
   stats() {
     return {
       rules: this.rules.size,

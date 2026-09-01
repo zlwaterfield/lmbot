@@ -123,11 +123,18 @@ export async function categorize(flags) {
   });
   if (cascade.classifier?.usage.calls) process.stdout.write('\r' + ' '.repeat(40) + '\r');
 
-  const reviewFor = (suggestion) =>
-    // An explicit per-rule setting wins, then --mark-reviewed marks everything,
-    // then --auto-review applies its tier and evidence gate.
-    suggestion.review ??
-    (markReviewed ? true : autoReview && qualifiesForAutoReview(suggestion, autoReviewOpts));
+  const ignoreHolds = bool(flags['ignore-holds'], false);
+  const reviewFor = (tx, suggestion) => {
+    // A never_review hold is a standing instruction to look at this merchant
+    // yourself, so it outranks --mark-reviewed and --auto-review alike.
+    if (!ignoreHolds && cascade.holdsReview(tx)) return false;
+    // Otherwise: an explicit per-rule setting wins, then --mark-reviewed marks
+    // everything, then --auto-review applies its tier and evidence gate.
+    return (
+      suggestion.review ??
+      (markReviewed ? true : autoReview && qualifiesForAutoReview(suggestion, autoReviewOpts))
+    );
+  };
 
   const suggested = candidates
     .filter((tx) => suggestions.has(tx.id))
@@ -152,7 +159,12 @@ export async function categorize(flags) {
     { header: 'CATEGORY', get: (r) => truncate(kb.label(r.suggestion.categoryId), 28) },
     { header: 'VIA', get: (r) => r.suggestion.tier },
     { header: 'CONF', right: true, get: (r) => pct(r.suggestion.confidence) },
-    { header: 'REVIEWED', get: (r) => (reviewFor(r.suggestion) ? 'yes' : '') },
+    { header: 'REVIEWED', get: (r) =>
+      reviewFor(r.tx, r.suggestion)
+        ? 'yes'
+        : cascade.holdsReview(r.tx) && !ignoreHolds
+          ? color('dim', 'held')
+          : '' },
     { header: 'WHY', get: (r) => truncate(r.suggestion.reason, 36) },
   ]));
 
@@ -165,7 +177,8 @@ export async function categorize(flags) {
       color('bold', `${rows.length} of ${candidates.length} categorized `) +
       color('dim', `(${Object.entries(byTier).map(([t, n]) => `${n} by ${t}`).join(', ')})`)
   );
-  const willReview = rows.filter((r) => reviewFor(r.suggestion)).length;
+  const held = rows.filter((r) => !ignoreHolds && cascade.holdsReview(r.tx)).length;
+  const willReview = rows.filter((r) => reviewFor(r.tx, r.suggestion)).length;
   if (willReview) {
     console.log(
       color('dim', `${willReview} will also be marked reviewed`) +
@@ -179,6 +192,9 @@ export async function categorize(flags) {
     console.log(
       color('dim', `${unchanged.length} already in the suggested category — nothing to change`)
     );
+  }
+  if (held) {
+    console.log(color('dim', `${held} held for your review by a never_review rule`));
   }
   if (undecided.length) {
     console.log(
@@ -210,7 +226,7 @@ export async function categorize(flags) {
 
   const updates = rows.map(({ tx, suggestion }) => {
     const update = { id: tx.id, category_id: suggestion.categoryId };
-    if (reviewFor(suggestion)) update.status = 'reviewed';
+    if (reviewFor(tx, suggestion)) update.status = 'reviewed';
     if (suggestion.notes) update.notes = suggestion.notes;
     return update;
   });

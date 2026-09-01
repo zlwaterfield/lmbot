@@ -41,6 +41,7 @@ ${color('bold', 'CATEGORIZE')}
   --auto-review-observations 3   times memory must have seen the payee
   --auto-review-llm          let LLM suggestions auto-review too (off)
   --include-reviewed       Also touch uncategorized transactions already reviewed
+  --ignore-holds           Ignore never_review rules for this run
   --placeholder "Name"     Treat this category as uncategorized (repeatable)
   --no-placeholders        Only treat a truly empty category as uncategorized
   --batch-size 25          Transactions per LLM request
@@ -49,6 +50,7 @@ ${color('bold', 'CONFIRM')}
   --apply                  Actually mark reviewed (default: dry run)
   --yes, -y                Skip the confirmation prompt
   --min-confidence 0.8     Agreement needed to clear the review flag
+  --ignore-holds           Ignore never_review rules for this run
   --no-llm                 Rules + memory only
   ${color('dim', 'Never changes a category — only the review flag.')}
 

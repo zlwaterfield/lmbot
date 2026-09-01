@@ -120,7 +120,16 @@ export async function confirmCategories(flags) {
   });
   if (cascade.classifier?.usage.calls) process.stdout.write('\r' + ' '.repeat(40) + '\r');
 
-  const { agree, disagree, unsure, weak } = partitionByAgreement(candidates, suggestions, minConfidence);
+  const ignoreHolds = bool(flags['ignore-holds'], false);
+  const partitioned = partitionByAgreement(candidates, suggestions, minConfidence);
+  const { disagree, unsure, weak } = partitioned;
+
+  // Confirming a held merchant would defeat the point of holding it — clearing
+  // the review flag is this command's entire job.
+  const heldRows = ignoreHolds ? [] : partitioned.agree.filter((r) => cascade.holdsReview(r.tx));
+  const agree = ignoreHolds
+    ? partitioned.agree
+    : partitioned.agree.filter((r) => !cascade.holdsReview(r.tx));
 
   if (agree.length) {
     console.log('\n' + table(agree, [
@@ -142,6 +151,11 @@ export async function confirmCategories(flags) {
       color('yellow', `${disagree.length} disagree with their current category — left untouched.`)
     );
     console.log(color('dim', `  Run \`lmbot audit\` to review those; this command never changes a category.`));
+  }
+  if (heldRows.length) {
+    console.log(
+      color('dim', `${heldRows.length} agreed but held for your review by a never_review rule`)
+    );
   }
   if (unsure.length) {
     console.log(color('dim', `${unsure.length} with no confident opinion — left for you`));

@@ -433,6 +433,31 @@ real money in the wrong place, so those are left for you.
 | `notes` | note text stamped on the transaction when the rule fires |
 | `review` | override `--mark-reviewed` for this rule |
 
+### Never auto-reviewing a merchant
+
+Some merchants you always want to look at yourself. A `never_review` entry categorizes them
+normally but leaves the review flag alone:
+
+```json
+{
+  "rules": [ ... ],
+  "never_review": [
+    {
+      "name": "Investments and Amazon",
+      "match": "\\b(ws\\s*investments|wealthsimple|amazon|amzn)\\b"
+    }
+  ]
+}
+```
+
+This is deliberately **not** a per-rule `review: false`, which only applies when that rule
+fires. A hold is checked against the transaction, so it survives whichever tier categorized
+it — memory, the LLM, or no rule at all — and it also stops `confirm` from clearing the flag
+on a category that was already correct. It outranks both `--mark-reviewed` and
+`--auto-review`; `--ignore-holds` overrides it for one run.
+
+`lmbot rules` lists active holds, and the dry-run table marks affected rows `held`.
+
 A rule naming a category that doesn't exist in your account is reported with the closest
 real names and skipped — the run continues.
 

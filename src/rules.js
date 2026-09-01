@@ -6,10 +6,31 @@ import { RULES_PATH } from './config.js';
  * on amount, sign, or account. First matching rule wins, so order matters.
  */
 export class RuleEngine {
-  constructor(rules, kb, { warn = () => {} } = {}) {
+  constructor(rules, kb, { warn = () => {}, neverReview = [] } = {}) {
     this.kb = kb;
     this.rules = [];
     this.problems = [];
+
+    /**
+     * Merchants that must never be marked reviewed automatically, whichever
+     * tier categorized them. A per-rule `review: false` only applies when that
+     * rule fires, so it cannot cover a merchant the memory tier or the LLM
+     * handles — or one `confirm` agrees with. This is checked against the
+     * transaction itself, so it holds everywhere.
+     */
+    this.holds = [];
+    neverReview.forEach((hold, i) => {
+      const label = hold.name || `never_review #${i + 1}`;
+      try {
+        this.holds.push({
+          name: label,
+          regex: new RegExp(hold.match, hold.flags ?? 'i'),
+          fields: hold.fields ?? ['payee', 'original_name', 'notes'],
+        });
+      } catch (err) {
+        this.problems.push(`${label}: bad regex — ${err.message}`);
+      }
+    });
 
     rules.forEach((rule, i) => {
       const label = rule.name || `rule #${i + 1}`;
@@ -56,7 +77,8 @@ export class RuleEngine {
       throw new Error(`Could not parse ${path}: ${err.message}`);
     }
     const rules = Array.isArray(parsed) ? parsed : parsed.rules ?? [];
-    return new RuleEngine(rules, kb, { warn });
+    const neverReview = Array.isArray(parsed) ? [] : parsed.never_review ?? [];
+    return new RuleEngine(rules, kb, { warn, neverReview });
   }
 
   match(tx) {
@@ -86,7 +108,23 @@ export class RuleEngine {
     return null;
   }
 
+  /**
+   * Name of the hold covering this transaction, or null. A held transaction can
+   * still be categorized — it just never gets its review flag cleared for you.
+   */
+  holdsReview(tx) {
+    for (const hold of this.holds) {
+      const haystack = hold.fields.map((f) => tx[f] ?? '').join(' ␟ ');
+      if (hold.regex.test(haystack)) return hold.name;
+    }
+    return null;
+  }
+
   get size() {
     return this.rules.length;
+  }
+
+  get holdCount() {
+    return this.holds.length;
   }
 }

@@ -38,6 +38,15 @@ export async function rules(flags) {
     ]));
   }
 
+  if (engine.holdCount) {
+    console.log('\n' + color('bold', 'Never auto-reviewed') + color('dim', '  (categorized normally, but the review flag is left for you)'));
+    console.log(table(engine.holds, [
+      { header: '', get: () => color('yellow', '⏸') },
+      { header: 'HOLD', get: (h) => truncate(h.name, 26) },
+      { header: 'MATCHES', get: (h) => truncate(String(h.regex).slice(0, 52), 52) },
+    ]));
+  }
+
   if (problems.length) {
     console.log('');
     for (const problem of problems) console.log(color('yellow', `✗ ${problem}`));
