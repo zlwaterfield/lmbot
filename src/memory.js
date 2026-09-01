@@ -98,6 +98,13 @@ export class Memory {
         tier: 'memory',
         categoryId: exact.category_id,
         confidence: Math.min(0.99, 0.8 + exact.share * 0.19),
+        // Confidence answers "is this the right category?". How much evidence
+        // sits behind it is a separate question, and auto-review needs both —
+        // a payee seen 2/2 times is as confident as one seen 50/50 but is not
+        // nearly as well established.
+        observations: exact.count,
+        total: exact.total,
+        share: exact.share,
         reason: `seen ${exact.count}/${exact.total}× as this category`,
       };
     }
@@ -113,7 +120,13 @@ export class Memory {
       tier: 'memory',
       categoryId: best.entry.category_id,
       confidence: Math.min(0.95, best.score * best.entry.share),
-      reason: `similar to "${best.candidateKey}" (${best.entry.count}× )`,
+      observations: best.entry.count,
+      total: best.entry.total,
+      share: best.entry.share,
+      // A fuzzy hit matched a different payee string, so it is never treated as
+      // well-established enough to auto-review however often that payee recurs.
+      fuzzy: true,
+      reason: `similar to "${best.candidateKey}" (${best.entry.count}×)`,
     };
   }
 }

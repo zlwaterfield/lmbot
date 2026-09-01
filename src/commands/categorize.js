@@ -1,7 +1,7 @@
 import { LunchMoney } from '../lm.js';
 import { CategoryKB } from '../kb.js';
 import { isEditable } from '../normalize.js';
-import { Cascade } from '../classify.js';
+import { Cascade, qualifiesForAutoReview } from '../classify.js';
 import { writeJournal } from '../journal.js';
 import { resolveDateRange, num, bool, list } from '../args.js';
 import { table, color, money, truncate, pct, confirm } from '../util.js';
@@ -13,6 +13,12 @@ export async function categorize(flags) {
   const useLlm = bool(flags.llm, true);
   const minConfidence = num(flags['min-confidence'], 0.7);
   const markReviewed = bool(flags['mark-reviewed'], false);
+  const autoReview = bool(flags['auto-review'], false);
+  const autoReviewOpts = {
+    minConfidence: num(flags['auto-review-min'], 0.9),
+    minObservations: num(flags['auto-review-observations'], 3),
+    allowLlm: bool(flags['auto-review-llm'], false),
+  };
   const includeReviewed = bool(flags['include-reviewed'], false);
   const verbose = bool(flags.verbose ?? flags.v, false);
   const batchSize = num(flags['batch-size'], 25);
@@ -107,6 +113,12 @@ export async function categorize(flags) {
   });
   if (cascade.classifier?.usage.calls) process.stdout.write('\r' + ' '.repeat(40) + '\r');
 
+  const reviewFor = (suggestion) =>
+    // An explicit per-rule setting wins, then --mark-reviewed marks everything,
+    // then --auto-review applies its tier and evidence gate.
+    suggestion.review ??
+    (markReviewed ? true : autoReview && qualifiesForAutoReview(suggestion, autoReviewOpts));
+
   const rows = candidates
     .filter((tx) => suggestions.has(tx.id))
     .map((tx) => ({ tx, suggestion: suggestions.get(tx.id) }))
@@ -127,7 +139,8 @@ export async function categorize(flags) {
     { header: 'CATEGORY', get: (r) => truncate(kb.label(r.suggestion.categoryId), 28) },
     { header: 'VIA', get: (r) => r.suggestion.tier },
     { header: 'CONF', right: true, get: (r) => pct(r.suggestion.confidence) },
-    { header: 'WHY', get: (r) => truncate(r.suggestion.reason, 40) },
+    { header: 'REVIEWED', get: (r) => (reviewFor(r.suggestion) ? 'yes' : '') },
+    { header: 'WHY', get: (r) => truncate(r.suggestion.reason, 36) },
   ]));
 
   const byTier = rows.reduce((acc, r) => {
@@ -139,6 +152,15 @@ export async function categorize(flags) {
       color('bold', `${rows.length} of ${candidates.length} categorized `) +
       color('dim', `(${Object.entries(byTier).map(([t, n]) => `${n} by ${t}`).join(', ')})`)
   );
+  const willReview = rows.filter((r) => reviewFor(r.suggestion)).length;
+  if (willReview) {
+    console.log(
+      color('dim', `${willReview} will also be marked reviewed`) +
+        color('dim', autoReview && !markReviewed
+          ? ` (rules, plus memory seen ≥${autoReviewOpts.minObservations}× at ≥${pct(autoReviewOpts.minConfidence)})`
+          : '')
+    );
+  }
   if (undecided.length) {
     console.log(color('dim', `${undecided.length} left uncategorized — below the ${pct(minConfidence)} confidence floor.`));
   }
@@ -151,8 +173,7 @@ export async function categorize(flags) {
 
   const updates = rows.map(({ tx, suggestion }) => {
     const update = { id: tx.id, category_id: suggestion.categoryId };
-    const review = suggestion.review ?? markReviewed;
-    if (review) update.status = 'reviewed';
+    if (reviewFor(suggestion)) update.status = 'reviewed';
     if (suggestion.notes) update.notes = suggestion.notes;
     return update;
   });

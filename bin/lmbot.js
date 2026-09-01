@@ -32,7 +32,11 @@ ${color('bold', 'CATEGORIZE')}
   --yes, -y                Skip the confirmation prompt
   --min-confidence 0.7     Confidence floor for applying a suggestion
   --no-llm                 Rules + memory only, no API calls to Anthropic
-  --mark-reviewed          Also mark each categorized transaction as reviewed
+  --mark-reviewed          Mark every categorized transaction as reviewed
+  --auto-review            Mark reviewed only where the evidence earns it
+  --auto-review-min 0.9      confidence floor for auto-review
+  --auto-review-observations 3   times memory must have seen the payee
+  --auto-review-llm          let LLM suggestions auto-review too (off)
   --include-reviewed       Also touch uncategorized transactions already reviewed
   --placeholder "Name"     Treat this category as uncategorized (repeatable)
   --no-placeholders        Only treat a truly empty category as uncategorized
@@ -58,6 +62,8 @@ ${color('bold', 'DUPLICATES')}
   --cross-account          Also flag same-amount matches across different accounts
 
 ${color('bold', 'LEARN')}
+  --placeholder "Name"     Don't learn from this category unless reviewed
+  --no-placeholders        Learn from every categorized transaction
   --min-count 2            Times a payee must appear before it is trusted
   --min-share 0.7          Share of those that must agree on one category
   --dry-run                Show what would be learned without saving
@@ -68,6 +74,7 @@ ${color('bold', 'EXAMPLES')}
   lmbot learn --year 2025                    ${color('dim', '# teach it your habits first')}
   lmbot categorize --month 2026-08           ${color('dim', '# preview one month')}
   lmbot categorize --month 2026-08 --apply   ${color('dim', '# commit it')}
+  lmbot categorize --last-days 30 --auto-review --apply
   lmbot categorize --year 2024 --include-reviewed --apply
   lmbot audit --last-days 90                 ${color('dim', '# find likely mistakes')}
   lmbot payees --year 2025                   ${color('dim', '# preview merchant renames')}

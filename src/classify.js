@@ -67,6 +67,31 @@ export class Cascade {
   }
 }
 
+/**
+ * Should this suggestion be marked reviewed without a human looking at it?
+ *
+ * A rule qualifies because you wrote it: it is deterministic and already an
+ * explicit statement of intent. A memory hit qualifies only when it both agrees
+ * with itself and has enough history behind it — an exact payee match seen once
+ * or twice is a good guess, not a settled fact. The LLM never qualifies by
+ * default; deferring to it is exactly the case worth a human glance.
+ */
+export function qualifiesForAutoReview(suggestion, opts = {}) {
+  const { minConfidence = 0.9, minObservations = 3, allowLlm = false } = opts;
+  if (!suggestion) return false;
+
+  if (suggestion.tier === 'rule') return true;
+
+  if (suggestion.tier === 'memory') {
+    if (suggestion.fuzzy) return false;
+    if ((suggestion.observations ?? 0) < minObservations) return false;
+    return suggestion.confidence >= minConfidence;
+  }
+
+  if (suggestion.tier === 'llm') return allowLlm && suggestion.confidence >= minConfidence;
+  return false;
+}
+
 export function tierLabel(tier) {
   return { rule: 'rule', memory: 'memory', llm: 'llm' }[tier] ?? tier;
 }

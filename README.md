@@ -107,6 +107,30 @@ lmbot categorize --no-llm --apply            # rules + memory only, no LLM cost
 lmbot categorize --month 2026-08 --apply --mark-reviewed
 ```
 
+#### Marking things reviewed
+
+`--mark-reviewed` marks everything it categorizes. `--auto-review` is the narrower version:
+mark reviewed **only where the evidence earns it**.
+
+```bash
+lmbot categorize --last-days 30 --auto-review --apply
+```
+
+| Tier | Auto-reviewed? |
+|---|---|
+| **rule** | yes — you wrote the rule, it is already a statement of intent |
+| **memory** | only on an exact payee match seen ≥3 times, at ≥0.9 confidence |
+| **llm** | no — deferring to the model is exactly the case worth a glance |
+
+The two conditions on memory are doing different jobs. Confidence answers *"is this the
+right category?"*; the observation count answers *"how much history is behind that?"* A
+payee seen twice and a payee seen fifty times both score 0.99, so confidence alone would
+auto-review a coincidence. A fuzzy (non-exact) payee match never auto-reviews, however
+often that payee recurs.
+
+Tune with `--auto-review-min`, `--auto-review-observations`, and `--auto-review-llm`.
+The dry-run table has a `REVIEWED` column so you can see the split before committing.
+
 To **back-run over history**, add `--include-reviewed` so it also picks up old
 uncategorized transactions you already marked reviewed:
 
@@ -192,6 +216,12 @@ lmbot learn --year 2025
 lmbot learn --min-count 3 --min-share 0.8    # stricter
 lmbot learn --dry-run                        # preview without saving
 ```
+
+`learn` applies the same placeholder rule as `categorize`: a transaction a sync dropped
+into an import-default category that nobody ever reviewed is **not** learned from. Without
+that, the memory tier learns that `Payment, Transfer` is the right answer and then
+confidently reproduces it forever. Reviewing such a transaction makes it real signal again —
+that is you accepting the category.
 
 A payee is only trusted once it appears `--min-count` times (default 2) *and*
 `--min-share` of those agree on one category (default 0.7). A merchant you split evenly
