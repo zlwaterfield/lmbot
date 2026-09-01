@@ -203,10 +203,22 @@ stricter line, `--no-llm` confirms only from your own rules and history.
 
 ### `audit` — find ones it got wrong
 
-The other kind of back-run: re-examines transactions that *already* have a category and
-reports where the cascade strongly disagrees. Its confidence floor defaults to **0.85**,
-higher than `categorize`, because changing an existing category overwrites a decision you
-already made.
+The mirror of `confirm`. Both look at transactions that already have a category and run the
+cascade over them — `confirm` acts on **agreement**, `audit` acts on **disagreement**.
+
+```
+DATE          AMOUNT  PAYEE              CURRENT    SUGGESTED     VIA   CONF
+2026-08-10  9.00 CAD  STARBUCKS TORONTO  Groceries  Coffee Shops  rule  100%
+```
+
+Its confidence floor is **0.85**, higher than `categorize`'s 0.7, because overwriting a
+category destroys a decision you already made — that needs more evidence than filling an
+empty one. It is the only command that changes an existing category, so it is also the only
+one worth reading line by line before `--apply`.
+
+Import-default categories are skipped: a transaction in `Payment, Transfer` is not
+miscategorized, it is uncategorized, and reporting every one as a disagreement would bury
+the real findings. No tier can propose an import default as a "correction" either.
 
 ```bash
 lmbot audit --last-days 90

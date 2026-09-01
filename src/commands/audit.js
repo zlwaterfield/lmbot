@@ -1,8 +1,9 @@
 import { LunchMoney } from '../lm.js';
 import { CategoryKB } from '../kb.js';
 import { Cascade } from '../classify.js';
+import { isEditable } from '../normalize.js';
 import { writeJournal } from '../journal.js';
-import { resolveDateRange, num, bool } from '../args.js';
+import { resolveDateRange, num, bool, list } from '../args.js';
 import { table, color, money, truncate, pct, confirm } from '../util.js';
 
 /**
@@ -32,11 +33,25 @@ export async function audit(flags) {
   }
 
   const kb = await CategoryKB.load(lm);
+
+  // A transaction sitting in an import default is not miscategorized, it is
+  // uncategorized — reporting every one as a "disagreement" would bury the
+  // real findings. Those belong to `categorize`.
+  const usePlaceholders = bool(flags.placeholders, true);
+  const placeholderNames = list(flags.placeholder);
+  const placeholderConfig = CategoryKB.loadPlaceholderNames();
+  const { ids: placeholderIds, matched } = usePlaceholders
+    ? kb.resolvePlaceholders(placeholderNames.length ? placeholderNames : placeholderConfig.names)
+    : { ids: new Set(), matched: [] };
+  if (matched.length) console.log(color('dim', `skipping import defaults: ${matched.join(', ')}`));
+
   const cascade = await Cascade.create({
     kb,
     useLlm,
     minConfidence,
     verbose,
+    // Never let any tier propose an import default as a "correction".
+    excludeIds: placeholderIds,
     warn: (msg) => console.error(color('yellow', `  ⚠ rules.json — ${msg}`)),
   });
 
@@ -54,9 +69,9 @@ export async function audit(flags) {
   });
 
   const candidates = fetched.filter(
-    (tx) => tx.category_id != null && !tx.is_group_parent && !tx.is_split_parent
+    (tx) => tx.category_id != null && !placeholderIds.has(tx.category_id) && isEditable(tx)
   );
-  console.log(`\r${color('dim', `fetched ${fetched.length}, ${candidates.length} already categorized`)}   `);
+  console.log(`\r${color('dim', `fetched ${fetched.length}, ${candidates.length} with a real category to check`)}   `);
 
   if (!candidates.length) {
     console.log(color('yellow', '\nNothing categorized in range to audit.\n'));
@@ -78,6 +93,14 @@ export async function audit(flags) {
       suggestion.confidence >= minConfidence
     );
 
+  const agreed = candidates.filter((tx) => {
+    const suggestion = suggestions.get(tx.id);
+    return suggestion && suggestion.categoryId === tx.category_id;
+  }).length;
+  const noOpinion = candidates.filter((tx) => !suggestions.has(tx.id)).length;
+  console.log(
+    color('dim', `\n${agreed} agree · ${disagreements.length} disagree · ${noOpinion} no opinion`)
+  );
   if (cascade.classifier?.usage.calls) console.log(color('dim', cascade.classifier.costNote()));
 
   if (!disagreements.length) {
