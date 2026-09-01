@@ -189,21 +189,26 @@ export class CategoryKB {
     const contains = (haystack) =>
       new RegExp(`(^|[^a-z0-9])${wanted.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9]|$)`).test(haystack);
 
-    return this.assignable
+    // Score the leaf name far above the full path. Every category inside a
+    // group contains that group's name in its path, so path matching alone
+    // makes "Transportation" tie across every child of "2c. Transportation"
+    // and reports a false ambiguity.
+    const scored = this.assignable
       .map((cat) => {
         const name = cat.name.toLowerCase();
         const path = this.path(cat).toLowerCase();
-        return {
-          cat,
-          score: Math.max(
-            similarity(wanted, name),
-            similarity(wanted, path),
-            contains(name) || contains(path) ? 0.6 : 0
-          ),
-        };
+        const leaf = Math.max(similarity(wanted, name), contains(name) ? 0.75 : 0);
+        const viaPath = Math.max(similarity(wanted, path), contains(path) ? 0.4 : 0) * 0.5;
+        return { cat, score: Math.max(leaf, viaPath) };
       })
-      .filter((r) => r.score >= 0.35)
-      .sort((a, b) => b.score - a.score)
+      .filter((r) => r.score >= 0.3)
+      .sort((a, b) => b.score - a.score);
+
+    // Once there is a clear leader, trailing near-ties are noise rather than
+    // genuine alternatives — reporting them would block the autofix.
+    const best = scored[0]?.score ?? 0;
+    return scored
+      .filter((r) => r.score >= best * 0.9)
       .slice(0, limit)
       .map((r) => this.path(r.cat));
   }
