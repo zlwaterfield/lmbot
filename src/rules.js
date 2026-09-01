@@ -13,9 +13,14 @@ export class RuleEngine {
 
     rules.forEach((rule, i) => {
       const label = rule.name || `rule #${i + 1}`;
-      const categoryId = kb.resolve(rule.category ?? rule.category_id);
+      const wanted = rule.category ?? rule.category_id;
+      const categoryId = kb.resolve(wanted);
       if (categoryId == null) {
-        this.problems.push(`${label}: unknown category ${JSON.stringify(rule.category ?? rule.category_id)}`);
+        const near = kb.suggest(wanted);
+        this.problems.push(
+          `${label}: no category named ${JSON.stringify(wanted)}` +
+            (near.length ? ` — did you mean ${near.map((n) => JSON.stringify(n)).join(' or ')}?` : '')
+        );
         return;
       }
       let regex;
@@ -70,6 +75,7 @@ export class RuleEngine {
 
       return {
         tier: 'rule',
+        name: rule.name,
         categoryId: rule.categoryId,
         confidence: 1,
         reason: `rule "${rule.name}"`,

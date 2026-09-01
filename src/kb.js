@@ -7,6 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { DATA_DIR } from './config.js';
+import { similarity } from './normalize.js';
 
 export const PLACEHOLDERS_PATH = path.join(DATA_DIR, 'placeholders.json');
 
@@ -157,16 +158,54 @@ export class CategoryKB {
     return lines.join('\n').trim();
   }
 
-  /** Placeholder names from data/placeholders.json, or the built-in defaults. */
+  /**
+   * Placeholder names from data/placeholders.json, or the built-in defaults.
+   * `explicit` says whether the user chose these — a default that matches no
+   * category is expected and not worth warning about, but a name someone typed
+   * and got wrong very much is.
+   */
   static loadPlaceholderNames(file = PLACEHOLDERS_PATH) {
-    if (!fs.existsSync(file)) return DEFAULT_PLACEHOLDERS;
+    if (!fs.existsSync(file)) return { names: DEFAULT_PLACEHOLDERS, explicit: false };
     try {
       const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
       const names = Array.isArray(parsed) ? parsed : parsed.placeholders;
-      return Array.isArray(names) && names.length ? names : DEFAULT_PLACEHOLDERS;
+      return Array.isArray(names) && names.length
+        ? { names, explicit: true }
+        : { names: DEFAULT_PLACEHOLDERS, explicit: false };
     } catch {
-      return DEFAULT_PLACEHOLDERS;
+      return { names: DEFAULT_PLACEHOLDERS, explicit: false };
     }
+  }
+
+  /**
+   * Closest category names to something that didn't resolve, so an unknown
+   * category in rules.json points at the fix instead of just failing.
+   */
+  suggest(name, limit = 3) {
+    const wanted = String(name).trim().toLowerCase();
+    // A whole-word appearance is a stronger signal than token overlap:
+    // "Rent" inside "Mortgage / Rent" is obviously the intended category, but
+    // scores only 0.33 by tokens because of the two words it does not share.
+    const contains = (haystack) =>
+      new RegExp(`(^|[^a-z0-9])${wanted.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9]|$)`).test(haystack);
+
+    return this.assignable
+      .map((cat) => {
+        const name = cat.name.toLowerCase();
+        const path = this.path(cat).toLowerCase();
+        return {
+          cat,
+          score: Math.max(
+            similarity(wanted, name),
+            similarity(wanted, path),
+            contains(name) || contains(path) ? 0.6 : 0
+          ),
+        };
+      })
+      .filter((r) => r.score >= 0.35)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map((r) => this.path(r.cat));
   }
 
   summary() {

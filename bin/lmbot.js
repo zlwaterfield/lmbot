@@ -17,6 +17,7 @@ ${color('bold', 'COMMANDS')}
   duplicates    Find duplicate transactions                  ${color('dim', '(dry run unless --delete)')}
   learn         Rebuild the memory tier from your history
   categories    Show the category knowledge base    ${color('dim', '(--usage for a live breakdown)')}
+  rules         Check data/rules.json against your real categories
   explain       Show why one descriptor did or didn't match
   undo          Reverse a previous write
   help          Show this message
@@ -70,6 +71,11 @@ ${color('bold', 'DUPLICATES')}
   --days-apart 3           How far apart two transactions can be and still match
   --cross-account          Also flag same-amount matches across different accounts
 
+${color('bold', 'RULES')}
+  --fix                    Rewrite unambiguous category names in rules.json
+  --test                   Show how many transactions each rule actually matches
+  --yes, -y                Skip the confirmation prompt
+
 ${color('bold', 'LEARN')}
   --reviewed-only          Learn only from transactions you have reviewed
   --placeholder "Name"     Don't learn from this category unless reviewed
@@ -91,6 +97,7 @@ ${color('bold', 'EXAMPLES')}
   lmbot audit --last-days 90                 ${color('dim', '# find likely mistakes')}
   lmbot payees --year 2025                   ${color('dim', '# preview merchant renames')}
   lmbot duplicates --year 2025               ${color('dim', '# preview duplicates')}
+  lmbot rules --test                         ${color('dim', '# which rules work, which never fire')}
   lmbot explain "WOOF GANG LESLIEVILLE TORONTO"
   lmbot undo --list
 
@@ -111,6 +118,7 @@ const COMMANDS = {
   dupes: () => import('../src/commands/duplicates.js').then((m) => m.duplicates),
   learn: () => import('../src/commands/learn.js').then((m) => m.learn),
   categories: () => import('../src/commands/categories.js').then((m) => m.categories),
+  rules: () => import('../src/commands/rules.js').then((m) => m.rules),
   explain: () => import('../src/commands/explain.js').then((m) => m.explain),
   undo: () => import('../src/commands/undo.js').then((m) => m.undo),
 };

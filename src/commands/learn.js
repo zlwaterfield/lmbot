@@ -40,12 +40,16 @@ export async function learn(flags) {
   // again — that is the user accepting the category.
   const usePlaceholders = bool(flags.placeholders, true);
   const placeholderNames = list(flags.placeholder);
+  const placeholderConfig = CategoryKB.loadPlaceholderNames();
+  // A name the user typed and got wrong is worth flagging; a built-in default
+  // that this account simply doesn't have is not.
+  const explicitNames = placeholderNames.length > 0 || placeholderConfig.explicit;
   const { ids: placeholderIds, matched, unmatched } = usePlaceholders
-    ? kb.resolvePlaceholders(placeholderNames.length ? placeholderNames : CategoryKB.loadPlaceholderNames())
+    ? kb.resolvePlaceholders(placeholderNames.length ? placeholderNames : placeholderConfig.names)
     : { ids: new Set(), matched: [], unmatched: [] };
 
   if (matched.length) console.log(color('dim', `ignoring unreviewed: ${matched.join(', ')}`));
-  if (unmatched.length) {
+  if (unmatched.length && explicitNames) {
     console.log(color('yellow', `  ⚠ no category named ${unmatched.map((n) => JSON.stringify(n)).join(', ')} — ignored`));
   }
 

@@ -72,7 +72,7 @@ async function usage(lm, kb, flags) {
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
 
-  const { ids: placeholderIds } = kb.resolvePlaceholders(CategoryKB.loadPlaceholderNames());
+  const { ids: placeholderIds } = kb.resolvePlaceholders(CategoryKB.loadPlaceholderNames().names);
   const rows = [...counts.entries()]
     .map(([key, count]) => ({
       id: key,

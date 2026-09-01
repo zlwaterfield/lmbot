@@ -66,8 +66,12 @@ export async function confirmCategories(flags) {
   // would confirm nothing. Those belong to `categorize`.
   const usePlaceholders = bool(flags.placeholders, true);
   const placeholderNames = list(flags.placeholder);
+  const placeholderConfig = CategoryKB.loadPlaceholderNames();
+  // A name the user typed and got wrong is worth flagging; a built-in default
+  // that this account simply doesn't have is not.
+  const explicitNames = placeholderNames.length > 0 || placeholderConfig.explicit;
   const { ids: placeholderIds, matched } = usePlaceholders
-    ? kb.resolvePlaceholders(placeholderNames.length ? placeholderNames : CategoryKB.loadPlaceholderNames())
+    ? kb.resolvePlaceholders(placeholderNames.length ? placeholderNames : placeholderConfig.names)
     : { ids: new Set(), matched: [] };
   if (matched.length) console.log(color('dim', `skipping import defaults: ${matched.join(', ')}`));
 

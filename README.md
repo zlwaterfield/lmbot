@@ -363,6 +363,27 @@ Defaults: 90 days for `categorize` and `duplicates`, 365 for `audit` and `payees
 `data/rules.json`. Checked top to bottom, first match wins, and a match skips both the
 memory and LLM tiers.
 
+**Start by checking them.** The example file ships with generic category names (`Coffee`,
+`Rent`, `Income`) that almost no real account uses verbatim, so a fresh copy is mostly
+broken rules:
+
+```bash
+lmbot rules          # which load, which are broken, and what to rename them to
+lmbot rules --fix    # apply the unambiguous ones
+lmbot rules --test   # which rules actually match transactions, which never fire
+```
+
+```
+✗ Coffee shops: no category named "Coffee" — did you mean "Food & Drink > Coffee Shops"?
+✗ Rent: no category named "Rent" — did you mean "Mortgage / Rent"?
+✗ Rideshare: no category named "Transportation" — did you mean "Transport > Transportation
+  Other" or "Transport > Uber / Lift / Taxi"?
+```
+
+`--fix` only rewrites rules with exactly **one** candidate. Where two categories are
+plausible — `Transportation` could be either of two above — picking one silently would put
+real money in the wrong place, so those are left for you.
+
 ```json
 {
   "rules": [
@@ -400,8 +421,8 @@ memory and LLM tiers.
 | `notes` | note text stamped on the transaction when the rule fires |
 | `review` | override `--mark-reviewed` for this rule |
 
-A rule naming a category that doesn't exist in your account is reported as a warning and
-skipped — the run continues.
+A rule naming a category that doesn't exist in your account is reported with the closest
+real names and skipped — the run continues.
 
 ## Cost
 
