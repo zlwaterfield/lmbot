@@ -17,10 +17,12 @@ const NOISE_WORDS = new Set([
   'usa', 'us', 'online', 'com', 'www', 'http', 'https',
 ]);
 
-// Two-letter US state codes, stripped when they trail the descriptor.
+// Two-letter US state and Canadian province codes, stripped when they trail
+// the descriptor. Canadian banks emit "MARKHAM, ON" exactly like "AUSTIN, TX".
 const STATES = new Set(
   ('al ak az ar ca co ct de fl ga hi id il in ia ks ky la me md ma mi mn ms mo ' +
-   'mt ne nv nh nj nm ny nc nd oh ok or pa ri sc sd tn tx ut vt va wa wv wi wy dc')
+   'mt ne nv nh nj nm ny nc nd oh ok or pa ri sc sd tn tx ut vt va wa wv wi wy dc ' +
+   'ab bc mb nb nl ns nt nu on pe qc sk yt')
     .split(' ')
 );
 
@@ -62,9 +64,27 @@ export function normalizePayee(raw) {
   return tokens.slice(0, 4).join(' ');
 }
 
+/**
+ * Remove location tokens from a key.
+ *
+ * A city or neighbourhood identifies where you were, not who you paid, and
+ * leaving it in wrecks matching twice over: the same merchant in two branches
+ * gets two keys, while two unrelated merchants in one neighbourhood look nearly
+ * identical ("nodo leslieville toronto" vs "woof gang leslieville toronto"
+ * share two of three tokens). The first token is always kept — it is the
+ * merchant name, even if it happens to also be a place.
+ */
+export function stripLocations(key, stopTokens) {
+  if (!key || !stopTokens?.size) return key;
+  const tokens = key.split(' ').filter(Boolean);
+  const kept = tokens.filter((token, i) => i === 0 || !stopTokens.has(token));
+  return (kept.length ? kept : tokens.slice(0, 1)).join(' ');
+}
+
 /** Best normalized key for a transaction: prefer the raw bank descriptor. */
-export function payeeKey(tx) {
-  return normalizePayee(tx.original_name || tx.payee) || normalizePayee(tx.payee) || '';
+export function payeeKey(tx, stopTokens) {
+  const key = normalizePayee(tx.original_name || tx.payee) || normalizePayee(tx.payee) || '';
+  return stopTokens ? stripLocations(key, stopTokens) : key;
 }
 
 /** Token-set (Jaccard) similarity — robust to word order and extra tokens. */

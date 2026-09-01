@@ -17,6 +17,7 @@ ${color('bold', 'COMMANDS')}
   duplicates    Find duplicate transactions                  ${color('dim', '(dry run unless --delete)')}
   learn         Rebuild the memory tier from your history
   categories    Show the category knowledge base    ${color('dim', '(--usage for a live breakdown)')}
+  explain       Show why one descriptor did or didn't match
   undo          Reverse a previous write
   help          Show this message
 
@@ -90,6 +91,7 @@ ${color('bold', 'EXAMPLES')}
   lmbot audit --last-days 90                 ${color('dim', '# find likely mistakes')}
   lmbot payees --year 2025                   ${color('dim', '# preview merchant renames')}
   lmbot duplicates --year 2025               ${color('dim', '# preview duplicates')}
+  lmbot explain "WOOF GANG LESLIEVILLE TORONTO"
   lmbot undo --list
 
 ${color('bold', 'GLOBAL')}
@@ -109,6 +111,7 @@ const COMMANDS = {
   dupes: () => import('../src/commands/duplicates.js').then((m) => m.duplicates),
   learn: () => import('../src/commands/learn.js').then((m) => m.learn),
   categories: () => import('../src/commands/categories.js').then((m) => m.categories),
+  explain: () => import('../src/commands/explain.js').then((m) => m.explain),
   undo: () => import('../src/commands/undo.js').then((m) => m.undo),
 };
 

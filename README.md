@@ -43,6 +43,29 @@ tier runs on the smallest possible set.
 
 Anything landing below `--min-confidence` (default 0.7) is left alone rather than guessed at.
 
+**Location stripping.** A city identifies where you were, not who you paid, and leaving it
+in the key breaks matching twice over: the same merchant in two branches gets two entries,
+while two unrelated merchants in one neighbourhood look nearly identical. `nodo leslieville
+toronto` and `woof gang leslieville toronto` share two of three tokens despite being a
+restaurant and a dog groomer.
+
+`learn` infers which tokens are locations from your own data — a merchant name appears in
+one key, a city appears in dozens — so it works for any country without a hardcoded list.
+The first token is never stripped, since that is the merchant name even when it is also a
+place (`toronto parking authority` survives intact). Real effect on one account:
+
+```
+"shoppers drug mart" <- "shoppers drug mart etobicoke" + "shoppers drug mart toronto"
+"winners"            <- "winners etobicoke" + "winners toronto" + "winners toronto on"
+"starbucks"          <- "starbucks coffee toronto" + "starbucks" + "starbucks toronto"
+```
+
+Two known limits. A city the corpus has **never seen** is not stripped, so that transaction
+falls through to the LLM rather than being guessed at — no string rule can tell `winners` →
+`winners mississauga` (same merchant, new city) from `amazon` → `amazon web services`
+(different merchant), and a wrong category is worse than none. And the inference is
+statistical, so it needs a reasonable spread of history before it has signal.
+
 **Payee normalization** is what makes the memory tier work. `SQ *BLUE BOTTLE 4471`,
 `BLUE BOTTLE COFFEE #12 OAKLAND CA`, and `TST* BLUE BOTTLE` all collapse to the same key,
 so one learned merchant covers every variant your bank throws at it.
@@ -285,6 +308,30 @@ A payee is only trusted once it appears `--min-count` times (default 2) *and*
 `--min-share` of those agree on one category (default 0.7). A merchant you split evenly
 across two categories teaches nothing, so it's left for the LLM. Re-run it after a big
 manual categorization session.
+
+### `explain` — why didn't this match?
+
+```bash
+lmbot explain "WOOF GANG LESLIEVILLE   TORONTO"
+```
+
+```
+normalized   "woof gang leslieville toronto"
+memory key   "woof gang leslieville"  (dropped location tokens: toronto)
+
+memory
+  no exact key match — nearest stored keys:
+      0.51  nodo leslieville toronto        Restaurants    2×
+      0.51  timmie leslieville toronto on   Coffee        10×
+  best is 0.51, below the 0.70 fuzzy threshold — treated as unknown
+```
+
+A near-miss and a total miss look identical in a summary line. This shows the whole chain —
+normalization, the derived memory key, which location tokens were dropped, the nearest
+stored keys with their scores, and any matching rule — so you can tell whether to add a
+rule, categorize it once and re-run `learn`, or leave it to the LLM.
+
+Pass `--offline` to skip loading categories (ids instead of names, no API call).
 
 ### `undo` — reverse a run
 

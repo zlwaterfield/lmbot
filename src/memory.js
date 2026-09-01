@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { MEMORY_PATH, ensureDataDirs } from './config.js';
-import { payeeKey, similarity } from './normalize.js';
+import { payeeKey, similarity, stripLocations } from './normalize.js';
 
 /**
  * Learned tier. Built from transactions the user already categorized, so it
@@ -9,11 +9,39 @@ import { payeeKey, similarity } from './normalize.js';
  * clearly dominates — a payee split evenly across two categories teaches
  * nothing and is left for the LLM.
  */
+/**
+ * Infer which tokens are locations rather than merchant names, from the corpus
+ * itself — no hardcoded city list, so it works for any country.
+ *
+ * The signal is simple: a merchant name appears in one key, a city appears in
+ * dozens. "toronto" shows up across every restaurant, groomer and parking lot
+ * in the account; "woofgang" shows up in one. Only non-leading tokens are
+ * considered, because the first token is the merchant name.
+ */
+export function inferLocationTokens(keys, { minKeys = 4, maxShare = 0.02 } = {}) {
+  const distinct = new Set(keys);
+  const counts = new Map();
+
+  for (const key of distinct) {
+    const tokens = key.split(' ').filter(Boolean);
+    // Skip position 0 and de-duplicate within a key.
+    for (const token of new Set(tokens.slice(1))) {
+      counts.set(token, (counts.get(token) ?? 0) + 1);
+    }
+  }
+
+  const threshold = Math.max(minKeys, Math.ceil(distinct.size * maxShare));
+  const stop = new Set();
+  for (const [token, n] of counts) if (n >= threshold) stop.add(token);
+  return stop;
+}
+
 export class Memory {
   constructor(data = {}) {
     this.entries = data.entries ?? {};
     this.builtAt = data.built_at ?? null;
     this.sourceCount = data.source_count ?? 0;
+    this.stopTokens = new Set(data.stop_tokens ?? []);
   }
 
   static load(path = MEMORY_PATH) {
@@ -30,7 +58,12 @@ export class Memory {
     fs.writeFileSync(
       path,
       JSON.stringify(
-        { built_at: this.builtAt, source_count: this.sourceCount, entries: this.entries },
+        {
+          built_at: this.builtAt,
+          source_count: this.sourceCount,
+          stop_tokens: [...this.stopTokens].sort(),
+          entries: this.entries,
+        },
         null,
         2
       )
@@ -46,12 +79,19 @@ export class Memory {
    * `minCount` / `minShare` control how much evidence a key needs.
    */
   static build(transactions, { minCount = 2, minShare = 0.7 } = {}) {
+    const usable = transactions.filter((tx) => tx.category_id != null);
+
+    // First pass: raw keys, to learn which tokens are locations.
+    const rawKeys = usable.map((tx) => payeeKey(tx)).filter((k) => k && k.length >= 3);
+    const stopTokens = inferLocationTokens(rawKeys);
+
     const tally = new Map();
     let used = 0;
 
-    for (const tx of transactions) {
-      if (tx.category_id == null) continue;
-      const key = payeeKey(tx);
+    for (const tx of usable) {
+      // Second pass: rebuild keys with locations removed, so the same merchant
+      // in two neighbourhoods collapses to one entry.
+      const key = payeeKey(tx, stopTokens);
       if (!key || key.length < 3) continue;
       used++;
       if (!tally.has(key)) tally.set(key, { counts: new Map(), last: null, payees: new Set() });
@@ -81,6 +121,7 @@ export class Memory {
     memory.entries = entries;
     memory.builtAt = new Date().toISOString();
     memory.sourceCount = used;
+    memory.stopTokens = stopTokens;
     return memory;
   }
 
@@ -88,8 +129,10 @@ export class Memory {
    * Look up a transaction. Exact key match is trusted directly; otherwise the
    * closest key above `fuzzy` wins, with confidence discounted by how close it is.
    */
-  match(tx, { fuzzy = 0.75 } = {}) {
-    const key = payeeKey(tx);
+  match(tx, { fuzzy = 0.7 } = {}) {
+    // The incoming transaction must be normalized exactly like the stored keys
+    // were, or nothing lines up.
+    const key = payeeKey(tx, this.stopTokens);
     if (!key) return null;
 
     const exact = this.entries[key];
