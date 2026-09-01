@@ -62,8 +62,10 @@ ${color('bold', 'DUPLICATES')}
   --cross-account          Also flag same-amount matches across different accounts
 
 ${color('bold', 'LEARN')}
+  --reviewed-only          Learn only from transactions you have reviewed
   --placeholder "Name"     Don't learn from this category unless reviewed
   --no-placeholders        Learn from every categorized transaction
+  --no-skip-own-guesses    Also learn from lmbot's own unreviewed LLM writes
   --min-count 2            Times a payee must appear before it is trusted
   --min-share 0.7          Share of those that must agree on one category
   --dry-run                Show what would be learned without saving

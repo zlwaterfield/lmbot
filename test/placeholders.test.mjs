@@ -42,3 +42,18 @@ if (bare.resolvePlaceholders(DEFAULT_PLACEHOLDERS).ids.size !== 0) fail.push('de
 
 console.log(fail.length ? '✗ ' + fail.join('\n✗ ') : '✓ placeholders: 10 assertions passed');
 process.exit(fail.length ? 1 : 0);
+
+// --- the LLM must never be offered an import-default category ----------------
+{
+  const withPlaceholder = new CategoryKB([
+    { id: 11, name: 'Coffee', is_group: false, archived: false, group_id: null },
+    { id: 90, name: 'Payment, Transfer', is_group: false, archived: false, group_id: null },
+  ]);
+  const exclude = withPlaceholder.resolvePlaceholders(['Payment, Transfer']).ids;
+  const prompt = withPlaceholder.toPrompt(exclude);
+  const bad = [];
+  if (prompt.includes('id=90')) bad.push('placeholder category must be absent from the LLM prompt');
+  if (!prompt.includes('id=11')) bad.push('real categories must still be present');
+  if (bad.length) { console.log('✗ ' + bad.join('\n✗ ')); process.exit(1); }
+  console.log('✓ placeholders: 2 LLM-prompt assertions passed');
+}

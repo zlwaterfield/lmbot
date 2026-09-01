@@ -131,9 +131,10 @@ export class CategoryKB {
    * The prompt block handed to the LLM. Grouped, with the flags that actually
    * change the answer (income vs expense) spelled out.
    */
-  toPrompt() {
+  toPrompt(excludeIds = new Set()) {
     const grouped = new Map();
     for (const cat of this.assignable) {
+      if (excludeIds.has(cat.id)) continue;
       const group = this.groupName(cat) ?? 'Ungrouped';
       if (!grouped.has(group)) grouped.set(group, []);
       grouped.get(group).push(cat);

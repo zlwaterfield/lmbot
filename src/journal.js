@@ -31,3 +31,28 @@ export function listJournals() {
 export function readJournal(file) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
+
+/**
+ * Transaction ids that lmbot itself categorized via the LLM tier.
+ *
+ * These are guesses the tool made, not decisions anyone confirmed. If `learn`
+ * ingested them it would promote its own guesses into "what the user does",
+ * then reproduce them at high confidence forever — the same compounding
+ * failure as learning from import defaults, one step further along.
+ */
+export function llmWrittenIds() {
+  const ids = new Set();
+  for (const file of listJournals()) {
+    let journal;
+    try {
+      journal = readJournal(file);
+    } catch {
+      continue;
+    }
+    if (journal.command !== 'categorize' && journal.command !== 'audit') continue;
+    for (const entry of journal.entries ?? []) {
+      if (entry.applied?.tier === 'llm') ids.add(entry.id);
+    }
+  }
+  return ids;
+}

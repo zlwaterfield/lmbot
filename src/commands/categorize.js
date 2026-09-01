@@ -56,6 +56,7 @@ export async function categorize(flags) {
     useLlm,
     minConfidence,
     verbose,
+    excludeIds: placeholderIds,
     warn: (msg) => console.error(color('yellow', `  ⚠ rules.json — ${msg}`)),
   });
   const cstats = cascade.stats();

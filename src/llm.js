@@ -55,7 +55,7 @@ Rules:
 - Return exactly one result per transaction, echoing its ref.`;
 
 export class Classifier {
-  constructor({ kb, model = config.model, apiKey = config.anthropicKey, verbose = false } = {}) {
+  constructor({ kb, model = config.model, apiKey = config.anthropicKey, verbose = false, excludeIds = new Set() } = {}) {
     if (!apiKey) {
       throw new Error(
         'ANTHROPIC_API_KEY is not set, so the LLM tier is unavailable.\n' +
@@ -64,6 +64,9 @@ export class Classifier {
     }
     this.client = new Anthropic({ apiKey });
     this.kb = kb;
+    // Import-default categories are what we are trying to get transactions OUT
+    // of. Leaving them in the prompt lets the model hand one straight back.
+    this.excludeIds = excludeIds;
     this.model = model;
     this.verbose = verbose;
     this.usage = { input: 0, output: 0, cacheRead: 0, calls: 0 };
@@ -73,7 +76,7 @@ export class Classifier {
     return [
       {
         type: 'text',
-        text: `${SYSTEM_PREAMBLE}\n\n# Available categories\n\n${this.kb.toPrompt()}`,
+        text: `${SYSTEM_PREAMBLE}\n\n# Available categories\n\n${this.kb.toPrompt(this.excludeIds)}`,
         // The category list is identical across every batch in a run, so cache it.
         cache_control: { type: 'ephemeral' },
       },
@@ -157,7 +160,7 @@ export class Classifier {
         if (!tx) continue;
         if (result.category_id === 0) continue;
         // Guard against a hallucinated or group-level id reaching the API.
-        if (!this.kb.isAssignable(result.category_id)) {
+        if (!this.kb.isAssignable(result.category_id) || this.excludeIds.has(result.category_id)) {
           if (this.verbose) {
             console.error(`  ⚠ model returned unusable category ${result.category_id}, dropping`);
           }

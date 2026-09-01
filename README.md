@@ -38,7 +38,7 @@ tier runs on the smallest possible set.
 |---|---|---|---|
 | **rules** | your regexes in `data/rules.json` | free | 1.0 — always wins |
 | **memory** | learned from your own categorization history | free | 0.8–0.99, scaled by how consistently you've categorized that payee |
-| **llm** | Claude, given your full category list | ~cheap | whatever the model reports |
+| **llm** | Claude, given your category list minus import defaults | ~cheap | whatever the model reports |
 
 Anything landing below `--min-confidence` (default 0.7) is left alone rather than guessed at.
 
@@ -215,6 +215,24 @@ loses the least information.
 lmbot learn --year 2025
 lmbot learn --min-count 3 --min-share 0.8    # stricter
 lmbot learn --dry-run                        # preview without saving
+```
+
+`learn` refuses two kinds of input, both for the same reason: neither is evidence of what
+*you* do.
+
+1. **Import defaults.** A transaction a sync dropped into `Payment, Transfer` that nobody
+   reviewed. Learn from it and the memory tier concludes the placeholder is correct, then
+   reproduces it forever.
+2. **lmbot's own LLM guesses.** If you `--apply` LLM suggestions and re-run `learn`, the
+   tool would promote its own guesses into "what the user does" and repeat them at high
+   confidence — laundering a guess into a fact. Journal entries written by the LLM tier are
+   quarantined until you review those transactions.
+
+Reviewing a transaction clears both: that is you accepting the category. `--reviewed-only`
+is the strict version — learn from nothing else.
+
+```bash
+lmbot learn --year 2025 --reviewed-only
 ```
 
 `learn` applies the same placeholder rule as `categorize`: a transaction a sync dropped

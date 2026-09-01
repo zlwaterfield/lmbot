@@ -1,6 +1,7 @@
 import { LunchMoney } from '../lm.js';
 import { CategoryKB } from '../kb.js';
 import { Memory } from '../memory.js';
+import { llmWrittenIds } from '../journal.js';
 import { MEMORY_PATH } from '../config.js';
 import { resolveDateRange, num, bool, list } from '../args.js';
 import { table, color, truncate } from '../util.js';
@@ -48,18 +49,39 @@ export async function learn(flags) {
     console.log(color('yellow', `  ⚠ no category named ${unmatched.map((n) => JSON.stringify(n)).join(', ')} — ignored`));
   }
 
+  const reviewedOnly = bool(flags['reviewed-only'], false);
+  const guessed = bool(flags['skip-own-guesses'], true) ? llmWrittenIds() : new Set();
+
+  const isUnreviewedPlaceholder = (tx) =>
+    placeholderIds.has(tx.category_id) && tx.status !== 'reviewed';
+  // A category lmbot's own LLM tier wrote is only trustworthy once a human has
+  // reviewed it. Until then it is this tool's guess, not the user's habit.
+  const isOwnUnverifiedGuess = (tx) => guessed.has(tx.id) && tx.status !== 'reviewed';
+
   const withCategory = transactions.filter((tx) => tx.category_id != null);
-  const ignored = withCategory.filter(
-    (tx) => placeholderIds.has(tx.category_id) && tx.status !== 'reviewed'
-  );
-  const categorized = withCategory.filter(
-    (tx) => !(placeholderIds.has(tx.category_id) && tx.status !== 'reviewed')
-  );
+  const reject = (tx) =>
+    isUnreviewedPlaceholder(tx) ||
+    isOwnUnverifiedGuess(tx) ||
+    (reviewedOnly && tx.status !== 'reviewed');
+
+  const ignored = withCategory.filter(reject);
+  const categorized = withCategory.filter((tx) => !reject(tx));
+  const skippedPlaceholder = withCategory.filter(isUnreviewedPlaceholder).length;
+  const skippedGuess = withCategory.filter((tx) => !isUnreviewedPlaceholder(tx) && isOwnUnverifiedGuess(tx)).length;
   console.log(`\r${color('dim', `fetched ${transactions.length} transactions, ${categorized.length} usable`)}          `);
-  if (ignored.length) {
+  if (skippedPlaceholder) {
     console.log(
-      color('yellow', `  ${ignored.length} skipped: sitting in an import-default category and never reviewed`)
+      color('yellow', `  ${skippedPlaceholder} skipped: in an import-default category and never reviewed`)
     );
+  }
+  if (skippedGuess) {
+    console.log(
+      color('yellow', `  ${skippedGuess} skipped: lmbot's own LLM guesses, not yet reviewed by you`)
+    );
+  }
+  if (reviewedOnly) {
+    const other = ignored.length - skippedPlaceholder - skippedGuess;
+    if (other > 0) console.log(color('yellow', `  ${other} skipped: not reviewed (--reviewed-only)`));
   }
 
   if (!categorized.length) {

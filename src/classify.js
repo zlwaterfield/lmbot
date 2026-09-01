@@ -15,10 +15,10 @@ export class Cascade {
     this.minConfidence = minConfidence;
   }
 
-  static async create({ kb, useLlm = true, minConfidence = 0.7, verbose = false, warn }) {
+  static async create({ kb, useLlm = true, minConfidence = 0.7, verbose = false, warn, excludeIds = new Set() }) {
     const rules = RuleEngine.load(kb, { warn });
     const memory = Memory.load();
-    const classifier = useLlm ? new Classifier({ kb, verbose }) : null;
+    const classifier = useLlm ? new Classifier({ kb, verbose, excludeIds }) : null;
     return new Cascade({ kb, rules, memory, classifier, minConfidence });
   }
 
