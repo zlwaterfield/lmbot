@@ -59,6 +59,7 @@ ${color('bold', 'AUDIT')}   ${color('dim', 'reports on everything; only writes t
   --min-confidence 0.85    Higher floor than categorize — it overwrites your work
   --include-reviewed       Also CHANGE transactions you already reviewed
   --unreviewed-only        Don't even look at reviewed ones (smaller, cheaper run)
+  --ungrouped              List every transaction instead of one row per merchant
   --no-llm                 Rules + memory only
 
 ${color('bold', 'PAYEES')}

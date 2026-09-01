@@ -1,7 +1,7 @@
 import { LunchMoney } from '../lm.js';
 import { CategoryKB } from '../kb.js';
 import { Cascade } from '../classify.js';
-import { isEditable } from '../normalize.js';
+import { isEditable, payeeKey } from '../normalize.js';
 import { writeJournal } from '../journal.js';
 import { resolveDateRange, num, bool, list } from '../args.js';
 import { table, color, money, truncate, pct, confirm } from '../util.js';
@@ -149,17 +149,37 @@ export async function audit(flags) {
     return;
   }
 
-  console.log('\n' + table(disagreements, [
-    { header: 'DATE', get: (r) => r.tx.date },
-    { header: 'AMOUNT', right: true, get: (r) => money(r.tx.amount, r.tx.currency) },
-    { header: 'PAYEE', get: (r) => truncate(r.tx.payee || r.tx.original_name, 28) },
-    { header: 'CURRENT', get: (r) => truncate(kb.label(r.tx.category_id), 24) },
-    { header: 'SUGGESTED', get: (r) => truncate(kb.label(r.suggestion.categoryId), 24) },
+  // One recurring merchant produces one decision, not one row per month. Nine
+  // identical Google Nest lines bury the two findings that actually differ.
+  const ungrouped = bool(flags.ungrouped, false);
+  const groups = new Map();
+  for (const row of disagreements) {
+    const key = `${payeeKey(row.tx)}|${row.tx.category_id}|${row.suggestion.categoryId}`;
+    if (!groups.has(key)) groups.set(key, { ...row, count: 0, first: row.tx.date, last: row.tx.date });
+    const g = groups.get(key);
+    g.count++;
+    if (row.tx.date < g.first) g.first = row.tx.date;
+    if (row.tx.date > g.last) g.last = row.tx.date;
+  }
+  const shown = ungrouped
+    ? disagreements.map((r) => ({ ...r, count: 1, first: r.tx.date, last: r.tx.date }))
+    : [...groups.values()].sort((a, b) => b.count - a.count || a.first.localeCompare(b.first));
+
+  console.log('\n' + table(shown, [
+    { header: 'N', right: true, get: (r) => (r.count > 1 ? `${r.count}×` : '') },
+    { header: 'DATES', get: (r) => (r.count > 1 ? `${r.first} → ${r.last}` : r.first) },
+    { header: 'PAYEE', get: (r) => truncate(r.tx.payee || r.tx.original_name, 26) },
+    { header: 'CURRENT', get: (r) => truncate(kb.compareLabels(r.tx.category_id, r.suggestion.categoryId)[0], 24) },
+    { header: 'SUGGESTED', get: (r) => truncate(kb.compareLabels(r.tx.category_id, r.suggestion.categoryId)[1], 24) },
     { header: 'VIA', get: (r) => r.suggestion.tier },
     { header: 'CONF', right: true, get: (r) => pct(r.suggestion.confidence) },
-    { header: 'REVIEWED', get: (r) => (r.tx.status === 'reviewed' ? color('dim', 'yes') : '') },
-    { header: 'WHY', get: (r) => truncate(r.suggestion.reason ?? '', 34) },
+    { header: 'WHY', get: (r) => truncate(r.suggestion.reason ?? '', 30) },
   ]));
+  if (!ungrouped && shown.length < disagreements.length) {
+    console.log(
+      color('dim', `\n${shown.length} distinct finding${shown.length === 1 ? '' : 's'} across ${disagreements.length} transactions (--ungrouped to list each)`)
+    );
+  }
 
   // When a finding list is mostly false positives, the cause is usually one
   // over-broad source rather than many bad guesses. Grouping by what produced

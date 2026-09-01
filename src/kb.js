@@ -101,6 +101,22 @@ export class CategoryKB {
     return { ids, matched, unmatched };
   }
 
+  /**
+   * Label for showing one category against another.
+   *
+   * Category paths share long group prefixes ("3a. Personal/Enterainment > …"),
+   * so truncating from the right renders both sides of a comparison identical
+   * and hides the only part that differs. The leaf carries the meaning; the
+   * group is only added back when two leaves collide.
+   */
+  compareLabels(aId, bId) {
+    const leaf = (id) => this.byId.get(id)?.name ?? `#${id}`;
+    const a = leaf(aId);
+    const b = leaf(bId);
+    if (a !== b) return [a, b];
+    return [this.label(aId), this.label(bId)];
+  }
+
   isAssignable(id) {
     const cat = this.byId.get(id);
     return Boolean(cat && !cat.is_group && !cat.archived);

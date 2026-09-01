@@ -231,8 +231,23 @@ The mirror of `confirm`. Both look at transactions that already have a category 
 cascade over them — `confirm` acts on **agreement**, `audit` acts on **disagreement**.
 
 ```
-DATE          AMOUNT  PAYEE              CURRENT    SUGGESTED     VIA   CONF
-2026-08-10  9.00 CAD  STARBUCKS TORONTO  Groceries  Coffee Shops  rule  100%
+ N  DATES                    PAYEE                CURRENT        SUGGESTED  VIA     CONF
+9×  2026-01-10 → 2026-08-10  GOOGLE *GOOGLE NEST  Subscriptions  Streaming  memory   96%
+```
+
+Findings are **one row per merchant**, not per transaction — a subscription billed monthly
+is one decision, and nine identical rows would bury the findings that differ.
+`--ungrouped` lists each transaction. The category columns show the leaf names, because
+sibling categories share a long group prefix and truncating from the right would render both
+sides identical, hiding the only part that matters.
+
+A findings list that is mostly false positives means one source is over-matching rather than
+many bad guesses, so they are also grouped by what produced them:
+
+```
+What produced these findings
+   14  rule "Mortgage"   ← check this one first
+    5  memory
 ```
 
 Its confidence floor is **0.85**, higher than `categorize`'s 0.7, because overwriting a
