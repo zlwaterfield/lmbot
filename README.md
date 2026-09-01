@@ -23,6 +23,7 @@ tiers still work offline.
 lmbot learn --year 2025            # teach it from your own history
 lmbot categorize --month 2026-08   # preview
 lmbot categorize --month 2026-08 --apply
+lmbot confirm --month 2026-08 --apply     # clear the rest of the review queue
 ```
 
 `learn` matters more than it looks. It reads transactions you already categorized and
@@ -137,6 +138,45 @@ uncategorized transactions you already marked reviewed:
 ```bash
 lmbot categorize --year 2024 --include-reviewed --apply
 ```
+
+### `confirm` — clear the review queue
+
+Lunch Money's own import rules categorize plenty of things correctly on their own:
+
+```
+UBER CANADA/UBERTRIP TORONTO, ON   Uber / Lift / Taxi    unreviewed
+RBC LIFE INSURANCE CO. MISSI       Health Insurance      unreviewed
+TORONTO HYDRO BPY                  Home Utility Bill     unreviewed
+```
+
+There is nothing to categorize here — the category is already right — but every one still
+sits unreviewed waiting for a human. `confirm` runs the cascade over them and, where an
+independent tier reaches the **same** category, marks them reviewed.
+
+```bash
+lmbot confirm --last-days 30
+lmbot confirm --last-days 30 --apply
+lmbot confirm --no-llm --apply           # rules + memory only
+```
+
+Every candidate lands in exactly one bucket:
+
+| | |
+|---|---|
+| **agree**, above the floor | marked reviewed — the agreement is the corroboration |
+| **agree**, below the floor | left for you |
+| **disagree** | left alone, and pointed at `lmbot audit` |
+| no opinion | left for you |
+
+**This command only ever writes `status`.** It never changes a category, however confident
+it is — overwriting a category is `audit`'s job and carries a much higher burden of proof.
+Import-default categories are skipped: agreeing with a placeholder confirms nothing, and
+those belong to `categorize`.
+
+One thing to be aware of: a transaction confirmed here becomes reviewed, and `learn` trusts
+reviewed transactions. That is intentional — the category came from your sync's rules and an
+independent tier agreed, which is two sources rather than one guess — but if you want a
+stricter line, `--no-llm` confirms only from your own rules and history.
 
 ### `audit` — find ones it got wrong
 

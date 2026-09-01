@@ -11,12 +11,13 @@ ${color('bold', 'USAGE')}
 
 ${color('bold', 'COMMANDS')}
   categorize    Categorize uncategorized transactions        ${color('dim', '(dry run unless --apply)')}
+  confirm       Mark reviewed where the category is already right ${color('dim', '(dry run unless --apply)')}
   audit         Re-check already-categorized ones for mistakes ${color('dim', '(the back-run)')}
   payees        Align merchant names across bank variants     ${color('dim', '(dry run unless --apply)')}
   duplicates    Find duplicate transactions                  ${color('dim', '(dry run unless --delete)')}
   learn         Rebuild the memory tier from your history
   categories    Show the category knowledge base    ${color('dim', '(--usage for a live breakdown)')}
-  undo          Reverse a previous categorize/audit run
+  undo          Reverse a previous write
   help          Show this message
 
 ${color('bold', 'DATE SELECTION')}   ${color('dim', '(shared by categorize, audit, duplicates, learn)')}
@@ -41,6 +42,13 @@ ${color('bold', 'CATEGORIZE')}
   --placeholder "Name"     Treat this category as uncategorized (repeatable)
   --no-placeholders        Only treat a truly empty category as uncategorized
   --batch-size 25          Transactions per LLM request
+
+${color('bold', 'CONFIRM')}
+  --apply                  Actually mark reviewed (default: dry run)
+  --yes, -y                Skip the confirmation prompt
+  --min-confidence 0.8     Agreement needed to clear the review flag
+  --no-llm                 Rules + memory only
+  ${color('dim', 'Never changes a category — only the review flag.')}
 
 ${color('bold', 'AUDIT')}
   --apply                  Overwrite the existing categories it disagrees with
@@ -78,6 +86,7 @@ ${color('bold', 'EXAMPLES')}
   lmbot categorize --month 2026-08 --apply   ${color('dim', '# commit it')}
   lmbot categorize --last-days 30 --auto-review --apply
   lmbot categorize --year 2024 --include-reviewed --apply
+  lmbot confirm --last-days 30               ${color('dim', '# clear the review queue')}
   lmbot audit --last-days 90                 ${color('dim', '# find likely mistakes')}
   lmbot payees --year 2025                   ${color('dim', '# preview merchant renames')}
   lmbot duplicates --year 2025               ${color('dim', '# preview duplicates')}
@@ -91,6 +100,7 @@ ${color('bold', 'GLOBAL')}
 const COMMANDS = {
   categorize: () => import('../src/commands/categorize.js').then((m) => m.categorize),
   categorise: () => import('../src/commands/categorize.js').then((m) => m.categorize),
+  confirm: () => import('../src/commands/confirm.js').then((m) => m.confirmCategories),
   audit: () => import('../src/commands/audit.js').then((m) => m.audit),
   backfill: () => import('../src/commands/audit.js').then((m) => m.audit),
   payees: () => import('../src/commands/payees.js').then((m) => m.payees),

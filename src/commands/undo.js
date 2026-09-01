@@ -56,6 +56,7 @@ export async function undo(flags, positional) {
     const state = entry[side] ?? {};
     if ('payee' in state) return state.payee || '(blank)';
     if ('category_id' in state) return kb.label(state.category_id);
+    if ('status' in state) return state.status;
     return '—';
   };
 
