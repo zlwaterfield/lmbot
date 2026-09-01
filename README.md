@@ -276,6 +276,45 @@ lmbot audit --year 2025 --include-reviewed
 lmbot audit --last-days 90 --apply           # accept the changes
 ```
 
+### `amazon` — categorize from the order export
+
+`AMZN Mktp CA` is opaque by design. The same descriptor covers vitamins, a bike bottle and a
+book, so no rule and no learned payee can ever categorize it — which is why Amazon is
+usually held back for manual review forever.
+
+The order history export fixes that. Join the bank charge to the order and you know what was
+actually bought:
+
+```bash
+lmbot amazon ~/Downloads/"Your Orders"/"Your Amazon Orders"/"Order History.csv" --year 2026
+lmbot amazon <csv> --year 2026 --apply --auto-review
+```
+
+```
+DATE           AMOUNT  BOUGHT                                    CATEGORY         CONF  REVIEWED
+2026-07-12  79.95 CAD  3× HydraPak Breakaway Bike Water Bottle…  Equipment         92%  yes
+2026-05-11  63.23 CAD  Balin Designs Crystal Doorknobs - Matte…  Household Items   92%  yes
+```
+
+Get the CSV from Amazon → **Account → Request My Data → Your Orders**.
+
+Matching is on **amount**, because Amazon charges on shipment and the dates drift by days
+(`--days-apart`, default 7). Order totals are tried first, then individual item prices, since
+a split shipment is billed per parcel. Cancelled orders are dropped — they were never charged
+and would otherwise create phantom matches.
+
+Three things are deliberately left alone:
+
+- **Unmatched charges.** Refunds, gift-card top-ups, and orders outside the export window are
+  exactly as opaque as before, so nothing is guessed.
+- **Ambiguous matches.** Two orders at the same amount inside the window are reported, not
+  resolved — picking the nearer date would be a coin flip.
+- **Low-confidence matches**, where the order genuinely spans categories.
+
+Only order-matched charges can auto-review, and this is the one command that overrides a
+`never_review` hold — the hold exists because the descriptor is opaque, and the export
+removes that reason. It says so when it does.
+
 ### `payees` — align merchant names
 
 Banks emit the same merchant a dozen ways. This collapses them to one name.
@@ -589,7 +628,7 @@ ANTHROPIC_MODEL=claude-haiku-4-5 lmbot categorize --year 2023 --include-reviewed
 npm test
 ```
 
-Thirteen suites, no framework and no network. They cover payee normalization and location inference,
+Fourteen suites, no framework and no network. They cover payee normalization and location inference,
 category-name suggestion, placeholder handling, the auto-review evidence gate, `never_review`
 holds, the agreement partition behind `confirm`, the guard that stops `learn` eating its own
 LLM guesses, merchant clustering (including the conservative

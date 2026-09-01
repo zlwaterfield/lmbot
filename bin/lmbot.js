@@ -13,6 +13,7 @@ ${color('bold', 'COMMANDS')}
   categorize    Categorize uncategorized transactions        ${color('dim', '(dry run unless --apply)')}
   confirm       Mark reviewed where the category is already right ${color('dim', '(dry run unless --apply)')}
   audit         Re-check already-categorized ones for mistakes ${color('dim', '(the back-run)')}
+  amazon        Categorize Amazon charges from an order export ${color('dim', '(dry run unless --apply)')}
   payees        Align merchant names across bank variants     ${color('dim', '(dry run unless --apply)')}
   duplicates    Find duplicate transactions                  ${color('dim', '(dry run unless --delete)')}
   learn         Rebuild the memory tier from your history
@@ -62,6 +63,14 @@ ${color('bold', 'AUDIT')}   ${color('dim', 'reports on everything; only writes t
   --ungrouped              List every transaction instead of one row per merchant
   --no-llm                 Rules + memory only
 
+${color('bold', 'AMAZON')}   ${color('dim', 'lmbot amazon <order-history.csv>')}
+  --apply                  Actually write to Lunch Money (default: dry run)
+  --auto-review            Also mark reviewed where confidence is high
+  --min-confidence 0.8     Floor for applying, and for auto-review
+  --days-apart 7           How far a charge may sit from its order date
+  --match "<regex>"        Override how Amazon transactions are recognised
+  ${color('dim', 'Only order-matched charges are touched; unmatched ones are left alone.')}
+
 ${color('bold', 'PAYEES')}
   --apply                  Actually rename in Lunch Money (default: dry run)
   --yes, -y                Skip the confirmation prompt
@@ -99,6 +108,7 @@ ${color('bold', 'EXAMPLES')}
   lmbot categorize --year 2024 --include-reviewed --apply
   lmbot confirm --last-days 30               ${color('dim', '# clear the review queue')}
   lmbot audit --last-days 90                 ${color('dim', '# find likely mistakes')}
+  lmbot amazon ~/Downloads/Order\\ History.csv --year 2026
   lmbot payees --year 2025                   ${color('dim', '# preview merchant renames')}
   lmbot duplicates --year 2025               ${color('dim', '# preview duplicates')}
   lmbot rules --test                         ${color('dim', '# which rules work, which never fire')}
@@ -116,6 +126,7 @@ const COMMANDS = {
   confirm: () => import('../src/commands/confirm.js').then((m) => m.confirmCategories),
   audit: () => import('../src/commands/audit.js').then((m) => m.audit),
   backfill: () => import('../src/commands/audit.js').then((m) => m.audit),
+  amazon: () => import('../src/commands/amazon.js').then((m) => m.amazon),
   payees: () => import('../src/commands/payees.js').then((m) => m.payees),
   payee: () => import('../src/commands/payees.js').then((m) => m.payees),
   duplicates: () => import('../src/commands/duplicates.js').then((m) => m.duplicates),

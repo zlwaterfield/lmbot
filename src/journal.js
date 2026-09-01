@@ -49,6 +49,9 @@ export function llmWrittenIds() {
     } catch {
       continue;
     }
+    // 'amazon' is deliberately absent: those categories were decided from the
+    // order export listing what was actually bought, which is evidence rather
+    // than a guess about a bank descriptor.
     if (journal.command !== 'categorize' && journal.command !== 'audit') continue;
     for (const entry of journal.entries ?? []) {
       if (entry.applied?.tier === 'llm') ids.add(entry.id);
