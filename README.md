@@ -240,6 +240,17 @@ category destroys a decision you already made — that needs more evidence than 
 empty one. It is the only command that changes an existing category, so it is also the only
 one worth reading line by line before `--apply`.
 
+**It looks at everything, but writes conservatively.** Auditing is a report, so reviewed
+transactions are examined and reported like any other — a category you reviewed can still be
+wrong. Writing to one is the part that needs opting into:
+
+| | reported | changed by `--apply` |
+|---|---|---|
+| unreviewed | yes | yes |
+| reviewed | yes, marked `REVIEWED` | only with `--include-reviewed` |
+
+`--unreviewed-only` skips fetching reviewed ones entirely, for a smaller and cheaper run.
+
 Import-default categories are skipped: a transaction in `Payment, Transfer` is not
 miscategorized, it is uncategorized, and reporting every one as a disagreement would bury
 the real findings. No tier can propose an import default as a "correction" either.

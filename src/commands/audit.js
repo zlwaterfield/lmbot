@@ -21,7 +21,11 @@ export async function audit(flags) {
   const apply = bool(flags.apply, false);
   const useLlm = bool(flags.llm, true);
   const minConfidence = num(flags['min-confidence'], 0.85);
-  const includeReviewed = bool(flags['include-reviewed'], false);
+  // Looking and changing are different questions. An audit is a report, so it
+  // examines everything by default; writing to something you already reviewed
+  // is the part that needs opting into.
+  const unreviewedOnly = bool(flags['unreviewed-only'], false);
+  const applyReviewed = bool(flags['include-reviewed'], false);
   const verbose = bool(flags.verbose ?? flags.v, false);
 
   const lm = new LunchMoney({ verbose });
@@ -59,7 +63,7 @@ export async function audit(flags) {
   }
 
   const query = { include_pending: false };
-  if (!includeReviewed) query.status = 'unreviewed';
+  if (unreviewedOnly) query.status = 'unreviewed';
   if (range.start) {
     query.start_date = range.start;
     query.end_date = range.end;
@@ -84,7 +88,7 @@ export async function audit(flags) {
   // Say where every fetched transaction went. "fetched 297, checking 120"
   // otherwise reads as if 177 were lost.
   console.log(
-    `\r${color('dim', `fetched ${fetched.length} ${includeReviewed ? '' : 'unreviewed '}transactions in range`)}          `
+    `\r${color('dim', `fetched ${fetched.length} ${unreviewedOnly ? 'unreviewed ' : ''}transactions in range`)}          `
   );
   console.log(color('dim', `  ${candidates.length} with a real category to check`));
   if (blankCount || placeholderCount) {
@@ -96,10 +100,11 @@ export async function audit(flags) {
   if (uneditable) {
     console.log(color('dim', `  ${uneditable} split or grouped — the API can't update them`));
   }
-  if (!includeReviewed) {
-    console.log(
-      color('dim', '  reviewed transactions were not fetched — add --include-reviewed to audit those too')
-    );
+  const reviewedCount = candidates.filter((tx) => tx.status === 'reviewed').length;
+  if (unreviewedOnly) {
+    console.log(color('dim', '  reviewed transactions were not fetched (--unreviewed-only)'));
+  } else if (reviewedCount) {
+    console.log(color('dim', `  of those, ${reviewedCount} you have already reviewed — reported, but not changed without --include-reviewed`));
   }
 
   if (!candidates.length) {
@@ -152,6 +157,7 @@ export async function audit(flags) {
     { header: 'SUGGESTED', get: (r) => truncate(kb.label(r.suggestion.categoryId), 24) },
     { header: 'VIA', get: (r) => r.suggestion.tier },
     { header: 'CONF', right: true, get: (r) => pct(r.suggestion.confidence) },
+    { header: 'REVIEWED', get: (r) => (r.tx.status === 'reviewed' ? color('dim', 'yes') : '') },
   ]));
 
   console.log(
@@ -159,15 +165,31 @@ export async function audit(flags) {
       color('dim', `out of ${candidates.length} checked`)
   );
 
+  const writable = applyReviewed
+    ? disagreements
+    : disagreements.filter(({ tx }) => tx.status !== 'reviewed');
+  const withheld = disagreements.length - writable.length;
+  if (withheld) {
+    console.log(
+      color('dim', `${withheld} of those you already reviewed — add --include-reviewed to change them too`)
+    );
+  }
+
   if (!apply) {
     console.log(color('yellow', '\nDry run — nothing was changed. Re-run with --apply to accept these.'));
     console.log(color('dim', 'Review this list carefully first; it overwrites categories you already have.\n'));
     return;
   }
 
+  if (!writable.length) {
+    console.log(color('yellow', '\nEverything found is already reviewed — nothing applied.'));
+    console.log(color('dim', 'Add --include-reviewed if you want those changed.\n'));
+    return;
+  }
+
   if (!bool(flags.yes ?? flags.y, false) && process.stdin.isTTY) {
     const ok = await confirm(
-      color('yellow', `Overwrite ${disagreements.length} existing categories?`)
+      color('yellow', `Overwrite ${writable.length} existing categories?`)
     );
     if (!ok) {
       console.log(color('dim', 'Aborted — nothing was changed.\n'));
@@ -177,7 +199,7 @@ export async function audit(flags) {
 
   const journalFile = writeJournal(
     'audit',
-    disagreements.map(({ tx, suggestion }) => ({
+    writable.map(({ tx, suggestion }) => ({
       id: tx.id,
       date: tx.date,
       payee: tx.payee,
@@ -188,7 +210,7 @@ export async function audit(flags) {
   );
 
   await lm.updateTransactions(
-    disagreements.map(({ tx, suggestion }) => ({ id: tx.id, category_id: suggestion.categoryId }))
+    writable.map(({ tx, suggestion }) => ({ id: tx.id, category_id: suggestion.categoryId }))
   );
   console.log(color('green', `\n✓ Recategorized ${disagreements.length} transactions.`));
   if (journalFile) console.log(color('dim', `  journal: ${journalFile} (reverse with \`lmbot undo\`)\n`));

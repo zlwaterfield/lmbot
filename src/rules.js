@@ -5,6 +5,26 @@ import { RULES_PATH } from './config.js';
  * Deterministic tier. Regex over the payee / bank descriptor, optionally gated
  * on amount, sign, or account. First matching rule wins, so order matters.
  */
+/**
+ * Catch the JSON escaping trap before it becomes a rule that never fires.
+ *
+ * In JSON, "\b" is a backspace character, not a regex word boundary — that
+ * needs "\\b". A rule written with single backslashes parses fine, compiles
+ * fine, and silently matches nothing, which is the worst possible failure for
+ * something that quietly hands work to a paid tier instead.
+ */
+const CONTROL_ESCAPES = { '\b': '\\b', '\f': '\\f', '\n': '\\n', '\r': '\\r', '\t': '\\t' };
+
+function escapingProblem(pattern) {
+  const found = [...new Set([...String(pattern)].filter((ch) => ch.charCodeAt(0) < 32))];
+  if (!found.length) return null;
+  const shown = found.map((ch) => CONTROL_ESCAPES[ch] ?? `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`);
+  return (
+    `pattern contains a literal control character (${shown.join(', ')}) — ` +
+    'in JSON a regex backslash must be doubled, so write "\\\\b" not "\\b"'
+  );
+}
+
 export class RuleEngine {
   constructor(rules, kb, { warn = () => {}, neverReview = [] } = {}) {
     this.kb = kb;
@@ -21,6 +41,11 @@ export class RuleEngine {
     this.holds = [];
     neverReview.forEach((hold, i) => {
       const label = hold.name || `never_review #${i + 1}`;
+      const bad = escapingProblem(hold.match);
+      if (bad) {
+        this.problems.push(`${label}: ${bad}`);
+        return;
+      }
       try {
         this.holds.push({
           name: label,
@@ -42,6 +67,11 @@ export class RuleEngine {
           `${label}: no category named ${JSON.stringify(wanted)}` +
             (near.length ? ` — did you mean ${near.map((n) => JSON.stringify(n)).join(' or ')}?` : '')
         );
+        return;
+      }
+      const escaping = escapingProblem(rule.match);
+      if (escaping) {
+        this.problems.push(`${label}: ${escaping}`);
         return;
       }
       let regex;

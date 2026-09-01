@@ -54,10 +54,11 @@ ${color('bold', 'CONFIRM')}
   --no-llm                 Rules + memory only
   ${color('dim', 'Never changes a category — only the review flag.')}
 
-${color('bold', 'AUDIT')}
+${color('bold', 'AUDIT')}   ${color('dim', 'reports on everything; only writes to unreviewed by default')}
   --apply                  Overwrite the existing categories it disagrees with
   --min-confidence 0.85    Higher floor than categorize — it overwrites your work
-  --include-reviewed       Audit reviewed transactions too
+  --include-reviewed       Also CHANGE transactions you already reviewed
+  --unreviewed-only        Don't even look at reviewed ones (smaller, cheaper run)
   --no-llm                 Rules + memory only
 
 ${color('bold', 'PAYEES')}
