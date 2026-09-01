@@ -1,8 +1,9 @@
 import { LunchMoney } from '../lm.js';
 import { CategoryKB } from '../kb.js';
+import { isEditable } from '../normalize.js';
 import { Cascade } from '../classify.js';
 import { writeJournal } from '../journal.js';
-import { resolveDateRange, num, bool } from '../args.js';
+import { resolveDateRange, num, bool, list } from '../args.js';
 import { table, color, money, truncate, pct, confirm } from '../util.js';
 
 export async function categorize(flags) {
@@ -27,6 +28,23 @@ export async function categorize(flags) {
     color('dim', `categories: ${s.assignable} assignable across ${s.groups} groups (${s.income} income)`)
   );
 
+  // A sync assigns a default category to everything it imports, so "has a
+  // category" is not the same as "somebody categorized it". While a transaction
+  // is still unreviewed, sitting in one of those defaults means nothing.
+  const usePlaceholders = bool(flags.placeholders, true);
+  const placeholderNames = list(flags.placeholder);
+  const { ids: placeholderIds, matched, unmatched } = usePlaceholders
+    ? kb.resolvePlaceholders(placeholderNames.length ? placeholderNames : CategoryKB.loadPlaceholderNames())
+    : { ids: new Set(), matched: [], unmatched: [] };
+
+  if (matched.length) {
+    console.log(color('dim', `treating as uncategorized: ${matched.join(', ')}`));
+  }
+  if (unmatched.length) {
+    console.log(color('yellow', `  ⚠ no category named ${unmatched.map((n) => JSON.stringify(n)).join(', ')} — ignored`));
+    console.log(color('dim', '    run `lmbot categories --usage` to see the real names'));
+  }
+
   const cascade = await Cascade.create({
     kb,
     useLlm,
@@ -39,26 +57,42 @@ export async function categorize(flags) {
     color('dim', `tiers: ${cstats.rules} rules · ${cstats.memory} learned payees · ${cstats.llm ?? 'llm disabled'}`)
   );
 
-  // Only uncategorized transactions are candidates. By default we also require
-  // them to be unreviewed, so anything the user has already looked at is left alone.
-  const query = { category_id: 0, include_pending: false };
+  const query = { include_pending: false };
   if (!includeReviewed) query.status = 'unreviewed';
+  // The server-side category_id=0 filter would hide placeholder-categorized
+  // transactions, so it is only safe when no placeholders are in play.
+  if (!placeholderIds.size) query.category_id = 0;
   if (range.start) {
     query.start_date = range.start;
     query.end_date = range.end;
   }
 
   process.stdout.write(color('dim', '\nfetching transactions… '));
-  const fetched = await lm.getTransactions(query, { max: limit });
-  console.log(color('dim', `${fetched.length} found`));
+  const fetched = await lm.getTransactions(query, {
+    // With placeholders active the filtering happens client-side, so --limit
+    // must cap candidates rather than the fetch, or it would truncate early.
+    max: placeholderIds.size ? null : limit,
+    onPage: (n) => process.stdout.write(`\r${color('dim', `fetching transactions… ${n}`)}`),
+  });
+  console.log(`\r${color('dim', `fetched ${fetched.length} transactions`)}            `);
 
-  // Groups and split parents cannot be updated through this endpoint.
-  const candidates = fetched.filter(
-    (tx) => tx.category_id == null && !tx.is_group_parent && !tx.is_split_parent
-  );
-  const excluded = fetched.length - candidates.length;
-  if (excluded > 0) {
-    console.log(color('dim', `  (${excluded} skipped: grouped or split transactions can't be updated)`));
+  const isBlank = (tx) => tx.category_id == null;
+  const isPlaceholder = (tx) => tx.category_id != null && placeholderIds.has(tx.category_id);
+
+  // Split and grouped transactions are rejected by the bulk update endpoint.
+  const eligible = fetched.filter((tx) => (isBlank(tx) || isPlaceholder(tx)) && isEditable(tx));
+  const blankCount = eligible.filter(isBlank).length;
+  const placeholderCount = eligible.filter(isPlaceholder).length;
+  const candidates = limit ? eligible.slice(0, limit) : eligible;
+
+  if (placeholderCount) {
+    console.log(
+      color('dim', `  ${blankCount} with no category, ${placeholderCount} in a placeholder category`)
+    );
+  }
+  const skipped = fetched.filter((tx) => (isBlank(tx) || isPlaceholder(tx)) && !isEditable(tx)).length;
+  if (skipped > 0) {
+    console.log(color('dim', `  (${skipped} skipped: grouped or split transactions can't be updated)`));
   }
 
   if (!candidates.length) {
@@ -75,7 +109,9 @@ export async function categorize(flags) {
 
   const rows = candidates
     .filter((tx) => suggestions.has(tx.id))
-    .map((tx) => ({ tx, suggestion: suggestions.get(tx.id) }));
+    .map((tx) => ({ tx, suggestion: suggestions.get(tx.id) }))
+    // A placeholder transaction the cascade wants to leave where it is needs no write.
+    .filter(({ tx, suggestion }) => suggestion.categoryId !== tx.category_id);
 
   if (!rows.length) {
     console.log(color('yellow', `\nNo confident suggestions for ${candidates.length} transactions.`));
@@ -87,7 +123,8 @@ export async function categorize(flags) {
     { header: 'DATE', get: (r) => r.tx.date },
     { header: 'AMOUNT', right: true, get: (r) => money(r.tx.amount, r.tx.currency) },
     { header: 'PAYEE', get: (r) => truncate(r.tx.payee || r.tx.original_name, 34) },
-    { header: 'CATEGORY', get: (r) => truncate(kb.label(r.suggestion.categoryId), 30) },
+    { header: 'CURRENT', get: (r) => (r.tx.category_id == null ? '—' : truncate(kb.label(r.tx.category_id), 20)) },
+    { header: 'CATEGORY', get: (r) => truncate(kb.label(r.suggestion.categoryId), 28) },
     { header: 'VIA', get: (r) => r.suggestion.tier },
     { header: 'CONF', right: true, get: (r) => pct(r.suggestion.confidence) },
     { header: 'WHY', get: (r) => truncate(r.suggestion.reason, 40) },

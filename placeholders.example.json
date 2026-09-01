@@ -1,0 +1,24 @@
+{
+  "_comment": [
+    "Copy to data/placeholders.json to override the built-in list.",
+    "",
+    "These are categories a sync assigns by default rather than because you",
+    "chose them. While a transaction is still unreviewed, sitting in one of",
+    "these counts as uncategorized and `lmbot categorize` will fill it in.",
+    "Once you review a transaction, it is left alone regardless.",
+    "",
+    "Run `lmbot categories --usage` to see which categories your own unreviewed",
+    "transactions actually land in, then list the import defaults here.",
+    "Entries match a category name, a \"Group > Name\" path, or a numeric id.",
+    "Naming a group covers every category inside it."
+  ],
+  "placeholders": [
+    "Payment, Transfer",
+    "Uncategorized",
+    "Unknown",
+    "Other",
+    "General Merchandise",
+    "General Services",
+    "Miscellaneous"
+  ]
+}

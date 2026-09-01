@@ -62,6 +62,44 @@ lmbot categories --prompt
 Only touches transactions that are **uncategorized and unreviewed**. Grouped and split
 transactions are skipped (the API can't update them).
 
+#### "Uncategorized" includes import defaults
+
+A Plaid sync assigns a category to everything it imports, so *having* a category is not the
+same as somebody having categorized it. A transaction sitting in `Payment, Transfer` while
+still unreviewed is no more categorized than an empty one, and lmbot treats it that way.
+
+The review flag is the signal of intent: **once you review a transaction, it is left alone**,
+placeholder or not.
+
+Find out which categories yours actually land in:
+
+```bash
+lmbot categories --usage --last-days 30
+```
+
+```
+COUNT  CATEGORY           ID  CATEGORIZE TOUCHES IT?
+    3  Payment, Transfer  90  yes — placeholder
+    1  (uncategorized)     —  yes — no category
+    1  Transfer           91  no
+    1  Food > Coffee      11  no
+```
+
+The built-in list is `Payment, Transfer`, `Uncategorized`, `Unknown`, `Other`,
+`General Merchandise`, `General Services`, `Miscellaneous`. It is deliberately short —
+a plain `Transfer` category is *not* on it, because that is a perfectly good category
+somebody chose on purpose. Override per-run or permanently:
+
+```bash
+lmbot categorize --placeholder "Payment, Transfer" --placeholder "Needs Review"
+lmbot categorize --no-placeholders          # only a truly empty category counts
+cp placeholders.example.json data/placeholders.json
+```
+
+Entries match a category name, a `"Group > Name"` path, or a numeric id; naming a group
+covers everything in it. A name that matches nothing is reported as a warning rather than
+silently ignored.
+
 ```bash
 lmbot categorize --month 2026-08
 lmbot categorize --last-days 30 --apply

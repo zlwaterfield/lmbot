@@ -4,6 +4,31 @@
  * rules engine, the memory tier, and the LLM prompt.
  */
 
+import fs from 'node:fs';
+import path from 'node:path';
+import { DATA_DIR } from './config.js';
+
+export const PLACEHOLDERS_PATH = path.join(DATA_DIR, 'placeholders.json');
+
+/**
+ * Categories that a sync assigns by default rather than because anyone decided
+ * anything. A transaction sitting in one of these while still unreviewed is
+ * effectively uncategorized, so lmbot treats it as fair game.
+ *
+ * Kept deliberately short. Names like "Transfer" or "Shopping" are excluded
+ * because they are also perfectly good categories somebody chose on purpose —
+ * add your own with --placeholder or data/placeholders.json.
+ */
+export const DEFAULT_PLACEHOLDERS = [
+  'Payment, Transfer',
+  'Uncategorized',
+  'Unknown',
+  'Other',
+  'General Merchandise',
+  'General Services',
+  'Miscellaneous',
+];
+
 export class CategoryKB {
   constructor(categories) {
     this.all = categories;
@@ -37,6 +62,42 @@ export class CategoryKB {
     if (id == null) return '—';
     const cat = this.byId.get(id);
     return cat ? this.path(cat) : `#${id}`;
+  }
+
+  /**
+   * Resolve placeholder category names/ids into a Set of ids.
+   * Names are matched case-insensitively against both the leaf name and the
+   * full "Group > Name" path, and unmatched entries are reported rather than
+   * silently ignored — a typo here would quietly disable the whole feature.
+   */
+  resolvePlaceholders(names = DEFAULT_PLACEHOLDERS) {
+    const ids = new Set();
+    const matched = [];
+    const unmatched = [];
+
+    for (const ref of names) {
+      const wanted = String(ref).trim().toLowerCase();
+      if (!wanted) continue;
+      const hits = this.all.filter(
+        (cat) =>
+          String(cat.id) === wanted ||
+          cat.name.trim().toLowerCase() === wanted ||
+          this.path(cat).toLowerCase() === wanted
+      );
+      if (!hits.length) {
+        unmatched.push(ref);
+        continue;
+      }
+      for (const cat of hits) {
+        // A group placeholder covers everything inside it.
+        if (cat.is_group) {
+          for (const child of this.all.filter((c) => c.group_id === cat.id)) ids.add(child.id);
+        }
+        ids.add(cat.id);
+        matched.push(this.path(cat));
+      }
+    }
+    return { ids, matched, unmatched };
   }
 
   isAssignable(id) {
@@ -93,6 +154,18 @@ export class CategoryKB {
       }
     }
     return lines.join('\n').trim();
+  }
+
+  /** Placeholder names from data/placeholders.json, or the built-in defaults. */
+  static loadPlaceholderNames(file = PLACEHOLDERS_PATH) {
+    if (!fs.existsSync(file)) return DEFAULT_PLACEHOLDERS;
+    try {
+      const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+      const names = Array.isArray(parsed) ? parsed : parsed.placeholders;
+      return Array.isArray(names) && names.length ? names : DEFAULT_PLACEHOLDERS;
+    } catch {
+      return DEFAULT_PLACEHOLDERS;
+    }
   }
 
   summary() {

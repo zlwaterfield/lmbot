@@ -15,7 +15,7 @@ ${color('bold', 'COMMANDS')}
   payees        Align merchant names across bank variants     ${color('dim', '(dry run unless --apply)')}
   duplicates    Find duplicate transactions                  ${color('dim', '(dry run unless --delete)')}
   learn         Rebuild the memory tier from your history
-  categories    Show the category knowledge base
+  categories    Show the category knowledge base    ${color('dim', '(--usage for a live breakdown)')}
   undo          Reverse a previous categorize/audit run
   help          Show this message
 
@@ -34,6 +34,8 @@ ${color('bold', 'CATEGORIZE')}
   --no-llm                 Rules + memory only, no API calls to Anthropic
   --mark-reviewed          Also mark each categorized transaction as reviewed
   --include-reviewed       Also touch uncategorized transactions already reviewed
+  --placeholder "Name"     Treat this category as uncategorized (repeatable)
+  --no-placeholders        Only treat a truly empty category as uncategorized
   --batch-size 25          Transactions per LLM request
 
 ${color('bold', 'AUDIT')}
@@ -62,6 +64,7 @@ ${color('bold', 'LEARN')}
   --show 15                How many learned payees to print
 
 ${color('bold', 'EXAMPLES')}
+  lmbot categories --usage --last-days 30    ${color('dim', '# where do unreviewed txns sit?')}
   lmbot learn --year 2025                    ${color('dim', '# teach it your habits first')}
   lmbot categorize --month 2026-08           ${color('dim', '# preview one month')}
   lmbot categorize --month 2026-08 --apply   ${color('dim', '# commit it')}

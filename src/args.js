@@ -29,7 +29,12 @@ export function parseArgs(argv) {
           value = true;
         }
       }
-      flags[key] = value;
+      // A repeated flag accumulates, so `--placeholder A --placeholder B` works.
+      if (key in flags) {
+        flags[key] = Array.isArray(flags[key]) ? [...flags[key], value] : [flags[key], value];
+      } else {
+        flags[key] = value;
+      }
     } else if (arg.startsWith('-') && arg.length > 1) {
       for (const ch of arg.slice(1)) flags[ch] = true;
     } else {
@@ -43,6 +48,18 @@ export function num(value, fallback) {
   if (value === undefined || value === true) return fallback;
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
+}
+
+/**
+ * Normalize a possibly-repeated flag into an array of strings.
+ * Deliberately does NOT split on commas — Lunch Money category names contain
+ * them ("Payment, Transfer"), so repeat the flag to pass more than one.
+ */
+export function list(value) {
+  if (value === undefined || value === true || value === false) return [];
+  return (Array.isArray(value) ? value : [value])
+    .map((v) => String(v).trim())
+    .filter(Boolean);
 }
 
 export function bool(value, fallback = false) {
