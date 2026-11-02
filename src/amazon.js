@@ -150,3 +150,47 @@ export function describeItems(match, limit = 6) {
   const extra = items.length - names.length;
   return names.join(' | ') + (extra > 0 ? ` | (+${extra} more)` : '');
 }
+
+/** Marks a note as lmbot's, so a re-run refreshes it and never touches one you wrote. */
+export const NOTE_PREFIX = 'Amazon: ';
+
+// Product names run to 200 characters each; the note has to be readable in the
+// app's transaction list, where it is the thing you categorize from.
+const NOTE_MAX = 300;
+
+/** "Freshfield Prenatal Omega 3 DHA Supplement: Algae…" → "Freshfield Prenatal Omega 3 DHA Supplement" */
+function shortName(name) {
+  const cut = name.search(/,|:| - | – | \| | \(/);
+  const head = (cut >= 15 ? name.slice(0, cut) : name).trim();
+  return head.length > 60 ? head.slice(0, 59).trimEnd() + '…' : head;
+}
+
+function itemNames(items, limit = 4) {
+  const names = items.slice(0, limit).map((i) => (i.qty > 1 ? `${i.qty}× ` : '') + shortName(i.name));
+  const extra = items.length - names.length;
+  return names.join('; ') + (extra > 0 ? ` (+${extra} more)` : '');
+}
+
+/**
+ * The note left on a matched charge: what was actually bought. An ambiguous
+ * match lists each candidate order — the person categorizing it by hand can
+ * usually tell which one it was, even though amount and date could not.
+ */
+export function noteFor(match) {
+  let body;
+  if (match?.order) body = itemNames(match.item ? [match.item] : match.order.items);
+  else if (match?.ambiguous?.length) {
+    body = `one of ${match.ambiguous.length} orders — ` +
+      match.ambiguous.map((o) => itemNames(o.items, 2)).join(' / ');
+  } else return null;
+  const note = NOTE_PREFIX + body;
+  return note.length > NOTE_MAX ? note.slice(0, NOTE_MAX - 1) + '…' : note;
+}
+
+/** The note to write over `current`, or null to leave it as it is. */
+export function nextNote(current, match) {
+  const note = noteFor(match);
+  if (!note || current === note) return null;
+  if (current && !current.startsWith(NOTE_PREFIX)) return null;
+  return note;
+}

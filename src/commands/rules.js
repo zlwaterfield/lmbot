@@ -52,7 +52,7 @@ export async function rules(flags) {
     for (const problem of problems) console.log(color('yellow', `✗ ${problem}`));
 
     if (bool(flags.fix, false)) {
-      await autofix(kb);
+      await autofix(kb, flags);
       return;
     }
     console.log(
@@ -93,7 +93,7 @@ export async function rules(flags) {
  * one silently would put real transactions in the wrong place, so those are
  * left for a human.
  */
-async function autofix(kb) {
+async function autofix(kb, flags) {
   const raw = JSON.parse(fs.readFileSync(RULES_PATH, 'utf8'));
   const list = Array.isArray(raw) ? raw : raw.rules ?? [];
 
@@ -128,17 +128,26 @@ async function autofix(kb) {
     );
   }
 
-  if (process.stdin.isTTY && !(await confirm(`\nRewrite ${RULES_PATH}?`))) {
-    console.log(color('dim', 'Aborted — nothing was changed.\n'));
-    return;
+  if (!bool(flags.yes ?? flags.y, false)) {
+    if (!process.stdin.isTTY) {
+      console.log(color('yellow', '\nRefusing to rewrite rules without a TTY. Re-run with --yes if you are sure.\n'));
+      return;
+    }
+    if (!(await confirm(`\nRewrite ${RULES_PATH}?`))) {
+      console.log(color('dim', 'Aborted — nothing was changed.\n'));
+      return;
+    }
   }
 
   for (const c of changes) {
     c.rule.category = c.to;
     delete c.rule.category_id;
   }
+  // `undo` only reverses writes to Lunch Money, so keep the file being replaced.
+  const backup = `${RULES_PATH}.bak`;
+  fs.copyFileSync(RULES_PATH, backup);
   fs.writeFileSync(RULES_PATH, JSON.stringify(raw, null, 2) + '\n');
-  console.log(color('green', `\n✓ Updated ${changes.length} rules.`));
+  console.log(color('green', `\n✓ Updated ${changes.length} rules.`) + color('dim', ` Previous version saved to ${backup}`));
   if (ambiguous.length) {
     console.log(color('yellow', `${ambiguous.length} still need a decision from you.`));
   }

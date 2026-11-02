@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { parseCsv, loadOrders, matchTransaction, describeItems } from '../src/amazon.js';
+import { parseCsv, loadOrders, matchTransaction, describeItems, noteFor, nextNote, NOTE_PREFIX } from '../src/amazon.js';
 
 const fail = [];
 
@@ -60,6 +60,23 @@ const amb = matchTransaction(tx('2026-03-02', 45.0), dup);
 if (amb?.order) fail.push('two orders at the same amount must not resolve to one');
 if (amb?.ambiguous?.length !== 2) fail.push('both candidate orders must be reported as ambiguous');
 
+// --- notes: what was bought, readable in the app ---------------------------
+const multiNote = noteFor(byTotal);
+if (!multiNote?.startsWith(NOTE_PREFIX)) fail.push('a note must start with the prefix that marks it as lmbot\'s');
+if (!multiNote?.includes('Vitamin D3') || !multiNote?.includes('Magnesium Glycinate')) fail.push('a multi-item note must name every item');
+if (!noteFor({ order: orders.find((o) => o.id === '222') })?.includes('2× Dish Soap Refill')) fail.push('a note must show quantity');
+const long = { order: { items: [{ name: 'Freshfield Prenatal Omega 3 DHA Supplement: Algae-Based, 60 Softgels', qty: 1 }] } };
+if (noteFor(long) !== 'Amazon: Freshfield Prenatal Omega 3 DHA Supplement') fail.push(`a product name must be cut at its first separator, got "${noteFor(long)}"`);
+const huge = { order: { items: Array.from({ length: 9 }, (_, i) => ({ name: `Item ${i} `.repeat(20), qty: 1 })) } };
+if (noteFor(huge).length > 300) fail.push('a note must be capped so it stays readable');
+if (!noteFor(amb)?.startsWith('Amazon: one of 2 orders')) fail.push('an ambiguous match must note each candidate order');
+if (noteFor(null) !== null) fail.push('an unmatched charge must get no note — there is nothing to say');
+
+if (nextNote(null, byTotal) !== multiNote) fail.push('an empty note must be filled');
+if (nextNote('gift for mum', byTotal) !== null) fail.push('a note you wrote must never be replaced');
+if (nextNote('Amazon: something older', byTotal) !== multiNote) fail.push('lmbot\'s own note must be refreshed on a re-run');
+if (nextNote(multiNote, byTotal) !== null) fail.push('an identical note must not be rewritten');
+
 // A non-Amazon CSV should fail loudly rather than silently produce nothing.
 fs.writeFileSync(tmp, 'foo,bar\n1,2\n');
 let threw = false;
@@ -67,5 +84,5 @@ try { loadOrders(tmp); } catch { threw = true; }
 if (!threw) fail.push('a CSV without the expected columns must throw');
 
 fs.rmSync(tmp, { force: true });
-console.log(fail.length ? '✗ ' + fail.join('\n✗ ') : '✓ amazon: 18 assertions passed');
+console.log(fail.length ? '✗ ' + fail.join('\n✗ ') : '✓ amazon: 29 assertions passed');
 process.exit(fail.length ? 1 : 0);

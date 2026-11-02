@@ -6,4 +6,7 @@ node_modules/
 data/*
 !data/.gitkeep
 
+# Amazon order history exports — your full purchase history, for `lmbot amazon`.
+amazon/
+
 *.log

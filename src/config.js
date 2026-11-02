@@ -32,7 +32,7 @@ export const config = {
   lmToken: process.env.LUNCH_MONEY_TOKEN || process.env.LUNCHMONEY_TOKEN || '',
   lmBaseUrl: process.env.LUNCH_MONEY_BASE_URL || 'https://api.lunchmoney.dev/v2',
   anthropicKey: process.env.ANTHROPIC_API_KEY || '',
-  model: process.env.ANTHROPIC_MODEL || 'claude-opus-5',
+  model: process.env.ANTHROPIC_MODEL || 'claude-opus-5-5',
 };
 
 export function requireToken() {
