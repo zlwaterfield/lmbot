@@ -49,6 +49,7 @@ Rules:
 - Only ever return a category id that appears in the list below. Never invent one.
 - Amounts are positive for money out (a debit/expense) and negative for money in (a credit/refund/income). Only use a category flagged INCOME for negative amounts.
 - \`descriptor\` is the raw bank text and is usually more informative than \`payee\`.
+- A category may carry the user's own description after an em dash: what belongs there, the usual merchants, and where neighbouring things go instead. Follow it over your own reading of the category name.
 - \`items\` lists what was actually purchased, when it is known. It is far stronger evidence than the payee — a charge from a general retailer should be categorized by what was bought, not by the retailer. When items are present, a low confidence means the items genuinely span categories, not that the merchant is unfamiliar.
 - If you genuinely cannot tell what the merchant is, return category_id 0 with low confidence rather than guessing. A wrong category is worse than none — it will be silently applied to the user's real budget.
 - Prefer the specific category over a generic catch-all when the merchant is clear.
