@@ -299,9 +299,11 @@ DATE           AMOUNT  BOUGHT                                    CATEGORY       
 Get the CSV from Amazon → **Account → Request My Data → Your Orders**.
 
 Matching is on **amount**, because Amazon charges on shipment and the dates drift by days
-(`--days-apart`, default 7). Order totals are tried first, then individual item prices, since
-a split shipment is billed per parcel. Cancelled orders are dropped — they were never charged
-and would otherwise create phantom matches.
+(`--days-apart`, default 7). A split order is billed per parcel, so the order total is tried
+first, then each parcel (the items that shipped on the same day), then a single item's line
+total — price, tax and shipping. The window counts from the order date or any ship date, so a
+backordered parcel charged weeks later still matches. Cancelled orders are dropped — they were
+never charged and would otherwise create phantom matches.
 
 Three things are deliberately left alone:
 

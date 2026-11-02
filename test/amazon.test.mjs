@@ -60,6 +60,23 @@ const amb = matchTransaction(tx('2026-03-02', 45.0), dup);
 if (amb?.order) fail.push('two orders at the same amount must not resolve to one');
 if (amb?.ambiguous?.length !== 2) fail.push('both candidate orders must be reported as ambiguous');
 
+// --- current layout: every line carries its own total, parcels billed apart -
+// The fixture above is the older layout, which repeated the order total.
+fs.writeFileSync(tmp, [
+  'Order Date,Order ID,Order Status,Product Name,Total Amount,Unit Price,Currency,Original Quantity,Ship Date,Shipment Item Subtotal',
+  '2026-04-01T10:00:00Z,777,Closed,"Coffee Filters",11.30,10.00,CAD,1,2026-04-02T00:00:00Z,10.00',
+  '2026-04-01T10:00:00Z,777,Closed,"Water Bottle, 1L",22.60,20.00,CAD,1,2026-04-02T00:00:00Z,20.00',
+  '2026-04-01T10:00:00Z,777,Closed,"Bike Light",45.20,40.00,CAD,1,2026-04-15T00:00:00Z,40.00',
+].join('\n'));
+const lines = loadOrders(tmp).orders;
+if (lines[0]?.total !== 79.1) fail.push(`an order total must be the sum of its lines, got ${lines[0]?.total}`);
+const parcel = matchTransaction(tx('2026-04-03', 33.9), lines);
+if (parcel?.via !== 'shipment' || parcel.items?.length !== 2) fail.push('a charge for one parcel must match that parcel\'s items');
+const late = matchTransaction(tx('2026-04-16', 45.2), lines);
+if (!noteFor(late)?.includes('Bike Light') || noteFor(late).includes('Coffee')) fail.push('a parcel shipped weeks after the order must match by its ship date, and name only its own items');
+const line = matchTransaction(tx('2026-04-03', 22.6), lines);
+if (line?.item?.name !== 'Water Bottle, 1L') fail.push('one item must match on its line total, tax included');
+
 // --- notes: what was bought, readable in the app ---------------------------
 const multiNote = noteFor(byTotal);
 if (!multiNote?.startsWith(NOTE_PREFIX)) fail.push('a note must start with the prefix that marks it as lmbot\'s');
@@ -84,5 +101,5 @@ try { loadOrders(tmp); } catch { threw = true; }
 if (!threw) fail.push('a CSV without the expected columns must throw');
 
 fs.rmSync(tmp, { force: true });
-console.log(fail.length ? '✗ ' + fail.join('\n✗ ') : '✓ amazon: 29 assertions passed');
+console.log(fail.length ? '✗ ' + fail.join('\n✗ ') : '✓ amazon: 33 assertions passed');
 process.exit(fail.length ? 1 : 0);
