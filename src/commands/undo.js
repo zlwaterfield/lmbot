@@ -57,6 +57,7 @@ export async function undo(flags, positional) {
     if ('payee' in state) return state.payee || '(blank)';
     if ('category_id' in state) return kb.label(state.category_id);
     if ('status' in state) return state.status;
+    if ('notes' in state) return state.notes || '(no note)';
     return '—';
   };
 
@@ -83,6 +84,7 @@ export async function undo(flags, positional) {
     if ('category_id' in e.previous) update.category_id = e.previous.category_id ?? null;
     if ('status' in e.previous && e.previous.status) update.status = e.previous.status;
     if ('payee' in e.previous) update.payee = e.previous.payee ?? '';
+    if ('notes' in e.previous) update.notes = e.previous.notes ?? '';
     return update;
   });
 

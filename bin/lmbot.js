@@ -23,7 +23,7 @@ ${color('bold', 'COMMANDS')}
   undo          Reverse a previous write
   help          Show this message
 
-${color('bold', 'DATE SELECTION')}   ${color('dim', '(shared by categorize, confirm, audit, payees, duplicates, learn)')}
+${color('bold', 'DATE SELECTION')}   ${color('dim', '(shared by categorize, confirm, audit, amazon, payees, duplicates, learn)')}
   --month 2026-08          A single calendar month
   --year 2025              A whole year
   --last-days 30           Rolling window ending today
@@ -69,7 +69,10 @@ ${color('bold', 'AMAZON')}   ${color('dim', 'lmbot amazon <order-history.csv>')}
   --min-confidence 0.8     Floor for applying, and for auto-review
   --days-apart 7           How far a charge may sit from its order date
   --match "<regex>"        Override how Amazon transactions are recognised
+  --notes-only             Just note what was bought, on reviewed charges too — no LLM
+  --no-notes               Don't write the "Amazon: …" note
   ${color('dim', 'Only order-matched charges are touched; unmatched ones are left alone.')}
+  ${color('dim', 'Matched charges get a note of what was bought; a note you wrote is never replaced.')}
 
 ${color('bold', 'PAYEES')}
   --apply                  Actually rename in Lunch Money (default: dry run)

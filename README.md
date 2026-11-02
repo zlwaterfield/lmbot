@@ -299,9 +299,11 @@ DATE           AMOUNT  BOUGHT                                    CATEGORY       
 Get the CSV from Amazon → **Account → Request My Data → Your Orders**.
 
 Matching is on **amount**, because Amazon charges on shipment and the dates drift by days
-(`--days-apart`, default 7). Order totals are tried first, then individual item prices, since
-a split shipment is billed per parcel. Cancelled orders are dropped — they were never charged
-and would otherwise create phantom matches.
+(`--days-apart`, default 7). A split order is billed per parcel, so the order total is tried
+first, then each parcel (the items that shipped on the same day), then a single item's line
+total — price, tax and shipping. The window counts from the order date or any ship date, so a
+backordered parcel charged weeks later still matches. Cancelled orders are dropped — they were
+never charged and would otherwise create phantom matches.
 
 Three things are deliberately left alone:
 
@@ -309,11 +311,34 @@ Three things are deliberately left alone:
   exactly as opaque as before, so nothing is guessed.
 - **Ambiguous matches.** Two orders at the same amount inside the window are reported, not
   resolved — picking the nearer date would be a coin flip.
-- **Low-confidence matches**, where the order genuinely spans categories.
+- **Low-confidence matches**, where the order genuinely spans categories (below
+  `--min-confidence`, default 0.8).
 
 Only order-matched charges can auto-review, and this is the one command that overrides a
 `never_review` hold — the hold exists because the descriptor is opaque, and the export
 removes that reason. It says so when it does.
+
+**Notes.** Left alone is not the same as left blank. Every matched charge also gets a note
+saying what was bought, so the ones you categorize by hand are easy to decide in the app:
+
+```
+Amazon: Freshfield Prenatal Omega 3 DHA Supplement; 2× Naty BioEmbrace Newborn Diapers
+Amazon: one of 2 orders — Duracell Coppertop D Batteries / Hario 03 Coffee Filters
+```
+
+That includes the low-confidence matches, which are exactly the ones left for you, and the
+ambiguous ones, which list each candidate order. A note you wrote is never replaced — only one
+starting `Amazon: `, which a re-run refreshes. `--no-notes` turns it off.
+
+To backfill notes onto charges you already categorized, reviewed or not:
+
+```bash
+lmbot amazon <csv> --year 2026 --notes-only           # preview
+lmbot amazon <csv> --year 2026 --notes-only --apply
+```
+
+`--notes-only` makes no LLM call and changes no category or review flag. Notes are journaled
+like any other write, so `lmbot undo` puts the previous note back.
 
 ### `payees` — align merchant names
 
@@ -399,12 +424,6 @@ is the strict version — learn from nothing else.
 lmbot learn --year 2025 --reviewed-only
 ```
 
-`learn` applies the same placeholder rule as `categorize`: a transaction a sync dropped
-into an import-default category that nobody ever reviewed is **not** learned from. Without
-that, the memory tier learns that `Payment, Transfer` is the right answer and then
-confidently reproduces it forever. Reviewing such a transaction makes it real signal again —
-that is you accepting the category.
-
 A payee is only trusted once it appears `--min-count` times (default 2) *and*
 `--min-share` of those agree on one category (default 0.7). A merchant you split evenly
 across two categories teaches nothing, so it's left for the LLM. Re-run it after a big
@@ -482,14 +501,15 @@ Deletions are journaled too, but can't be reversed — the journal keeps the ful
 
 ## Date selection
 
-Shared by `categorize`, `audit`, `payees`, `duplicates`, and `learn`:
+Shared by `categorize`, `confirm`, `audit`, `amazon`, `payees`, `duplicates`, and `learn`:
 
 ```
 --month 2026-08        --year 2025           --last-days 30
 --start 2026-01-01     --end 2026-06-30      --limit 200
 ```
 
-Defaults: 90 days for `categorize` and `duplicates`, 365 for `audit` and `payees`, 730 for `learn`.
+Defaults: 90 days for `categorize`, `confirm` and `duplicates`, 365 for `audit`, `amazon` and
+`payees`, 730 for `learn`.
 
 ## Writing rules
 
@@ -520,7 +540,8 @@ lmbot rules --test   # which rules actually match transactions, which never fire
 
 `--fix` only rewrites rules with exactly **one** candidate. Where two categories are
 plausible — `Transportation` could be either of two above — picking one silently would put
-real money in the wrong place, so those are left for you.
+real money in the wrong place, so those are left for you. `lmbot undo` doesn't cover this
+file, so the version it replaces is kept as `data/rules.json.bak`.
 
 ```json
 {
@@ -594,11 +615,11 @@ The category list is sent with `cache_control`, so it's cached across every batc
 Transactions go up 25 at a time (`--batch-size`). With `learn` run first, most transactions
 never reach the LLM at all.
 
-Default model is `claude-opus-5`. For a large historical backfill where cost matters more
+Default model is `claude-opus-5-5`. For a large historical backfill where cost matters more
 than accuracy:
 
 ```bash
-ANTHROPIC_MODEL=claude-haiku-4-5 lmbot categorize --year 2023 --include-reviewed
+ANTHROPIC_MODEL=claude-haiku-5-5 lmbot categorize --year 2023 --include-reviewed
 ```
 
 ## Safety
